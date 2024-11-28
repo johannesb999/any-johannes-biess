@@ -32,7 +32,7 @@
     </div>
     <button @click="sendMessage">Senden</button>
 
-    <h2>Nachrichten aus Topic "{{ topic }}"</h2>
+    <h2>Nachrichten aus Topic "{{ topicBase }}"</h2>
     <ul>
       <li v-for="(msg, index) in messages" :key="index">{{ msg }}</li>
     </ul>
@@ -49,13 +49,19 @@ export default {
       temp: 45, // Standardwert für Temperatur
       hour: 20, // Standardwert für Stunde
       minute: 20, // Standardwert für Minute
-      topic: "johannes", // MQTT-Topic
+      topicBase: "johannes", // MQTT-Base-Topic
       brokerUrl: "wss://mqtt.hfg.design:443/mqtt", // WebSocket-URL des Brokers
       connectionStatus: "Nicht verbunden", // Statusanzeige
       messages: [], // Empfangene Nachrichten
     };
   },
   mounted() {
+    // Aktuelle Uhrzeit plus eine Minute setzen
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1); // Eine Minute hinzufügen
+    this.hour = now.getHours(); // Aktuelle Stunde
+    this.minute = now.getMinutes(); // Aktuelle Minute
+
     // MQTT-Client über WebSocket verbinden
     this.client = mqtt.connect(this.brokerUrl);
 
@@ -63,12 +69,12 @@ export default {
       this.connectionStatus = "Verbunden";
       console.log("Erfolgreich mit MQTT-Broker verbunden (WebSocket)");
 
-      // Abonniere das Topic
-      this.client.subscribe(this.topic, (err) => {
+      // Abonniere die Base-Topics
+      this.client.subscribe(`${this.topicBase}/#`, (err) => {
         if (err) {
-          console.error("Fehler beim Abonnieren des Topics:", err);
+          console.error("Fehler beim Abonnieren der Topics:", err);
         } else {
-          console.log(`Abonniert: ${this.topic}`);
+          console.log(`Abonniert: ${this.topicBase}/#`);
         }
       });
     });
@@ -105,21 +111,49 @@ export default {
         return;
       }
 
-      // Nachricht erstellen
-      const payload = JSON.stringify({
-        temp: this.temp,
-        hour: this.hour,
-        minute: this.minute,
-      });
-
+      // Sende die Werte an die jeweiligen Topics
       if (this.client && this.client.connected) {
-        this.client.publish(this.topic, payload, {}, (err) => {
-          if (err) {
-            console.error("Fehler beim Senden der Nachricht:", err);
-          } else {
-            alert(`Nachricht gesendet: ${payload}`);
+        // Temperatur senden
+        this.client.publish(
+          `${this.topicBase}/heat`,
+          String(this.temp),
+          {},
+          (err) => {
+            if (err) {
+              console.error("Fehler beim Senden von Temperatur:", err);
+            } else {
+              console.log(`Temperatur gesendet: ${this.temp}`);
+            }
           }
-        });
+        );
+
+        // Stunde senden
+        this.client.publish(
+          `${this.topicBase}/hour`,
+          String(this.hour),
+          {},
+          (err) => {
+            if (err) {
+              console.error("Fehler beim Senden von Stunde:", err);
+            } else {
+              console.log(`Stunde gesendet: ${this.hour}`);
+            }
+          }
+        );
+
+        // Minute senden
+        this.client.publish(
+          `${this.topicBase}/minute`,
+          String(this.minute),
+          {},
+          (err) => {
+            if (err) {
+              console.error("Fehler beim Senden von Minute:", err);
+            } else {
+              console.log(`Minute gesendet: ${this.minute}`);
+            }
+          }
+        );
       } else {
         alert("MQTT-Client ist nicht verbunden.");
       }
