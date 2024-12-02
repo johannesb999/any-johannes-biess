@@ -46,7 +46,7 @@ export default {
   data() {
     return {
       client: null,
-      temp: 45, // Standardwert für Temperatur
+      temp: 44, // Standardwert für Temperatur
       hour: 20, // Standardwert für Stunde
       minute: 20, // Standardwert für Minute
       topicBase: "johannes", // MQTT-Base-Topic
