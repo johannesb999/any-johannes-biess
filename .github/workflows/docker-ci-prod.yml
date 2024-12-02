@@ -1,0 +1,39 @@
+#
+#  This file is a template for the docker ci prod workflow
+#  The pipeline is triggered on push to a tag that starts with 'v'
+#  The pipeline builds and pushes the docker image to the Github Packages Registry
+#  
+#  This file was generated using the command: `bump --setup-workflows`
+#  To install bump run the command: `npm install -g @itmr-dev/bump`
+#
+#  For more information, visit:
+#  https://github.com/itmr-dev/bump
+#
+
+name: prod docker ci (@itmr.dev/bump)
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Github Packages Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push docker image
+        uses: docker/build-push-action@v3
+        with:
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:run-${{ github.run_id }}-${{ github.run_attempt }}
+            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
