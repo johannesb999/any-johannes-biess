@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h1>MQTT Sender (WebSocket)</h1>
-    <p>Verbindungsstatus: {{ connectionStatus }}</p>
+    <h1>Wecker Stellen</h1>
+    <p>Wecker: {{ connectionStatus }}</p>
 
     <div>
       <label for="temp">Temperatur:</label>
@@ -32,7 +32,7 @@
     </div>
     <button @click="sendMessage">Senden</button>
 
-    <h2>Nachrichten aus Topic "{{ topicBase }}"</h2>
+    <!-- <h2>Wecker gestellt auf "{{ topicBase }}"</h2> -->
     <ul>
       <li v-for="(msg, index) in messages" :key="index">{{ msg }}</li>
     </ul>
@@ -106,7 +106,7 @@ export default {
   methods: {
     sendMessage() {
       // Eingaben validieren
-      if (!this.temp || !this.hour || !this.minute) {
+      if (this.temp == null || this.hour == null || this.minute == null) {
         alert("Bitte alle Felder ausfüllen!");
         return;
       }

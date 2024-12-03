@@ -8,7 +8,7 @@
         rel="stylesheet"
       />
 
-      <title>Some Projects</title>
+      <title>KissenApp</title>
     </head>
     <NuxtPage />
 
@@ -16,8 +16,6 @@
   </div>
 </template>
 
-<script setup>
-</script>
+<script setup></script>
 
-<style>
-</style>
+<style></style>
