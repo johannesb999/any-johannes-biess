@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <header>
-      <h1>Klappensteuerung einstellen</h1>
+      <h1>Hasel Füttern</h1>
       <p>
         Status:
         <span :class="connectionStatusClass">{{ connectionStatus }}</span>
@@ -32,14 +32,17 @@
       </div>
     </div>
 
-    <button class="send-button" @click="sendMessage">Senden</button>
+    <button class="send-button" @click="checkPasswordBefore(sendMessage)">
+      Senden
+    </button>
 
     <div class="messages">
       <h3>Empfangene Nachrichten</h3>
       <ul>
         <li v-for="(msg, index) in messages" :key="index" class="message-item">
           <span class="message-topic">{{ msg.topic }}</span
-          >: <span class="message-content">{{ msg.message }}</span>
+          >:
+          <span class="message-content">{{ msg.message }}</span>
         </li>
       </ul>
     </div>
@@ -66,6 +69,7 @@ export default {
     };
 
     return {
+      loch: "HaselsFutter",
       client: null,
       klappen: [
         {
@@ -84,7 +88,7 @@ export default {
           time: "17:00",
         },
       ],
-      topicBase: "johannes",
+      topicBase: "hasel",
       brokerUrl: "wss://mqtt.hfg.design:443/mqtt",
       connectionStatus: "Nicht verbunden",
       messages: [], // Array von Nachrichtenobjekten
@@ -190,6 +194,14 @@ export default {
         alert("MQTT-Client ist nicht verbunden.");
       }
     },
+    checkPasswordBefore(action) {
+      const input = prompt("Eingabe:");
+      if (input === this.loch) {
+        action();
+      } else {
+        alert("Falsch!");
+      }
+    },
   },
   beforeUnmount() {
     if (this.client) {
@@ -199,16 +211,28 @@ export default {
 };
 </script>
 
-<style scoped>
+<style>
+/* Globale Styles für den Body */
+body {
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(to bottom right, #a1887f, #6d4c41),
+    /* Moderne Brauntöne */ url("/image.png"); /* Pfad zum Bild im public-Ordner */
+  font-family: "Roboto", sans-serif;
+  background-repeat: repeat;
+  background-size: 160px 160px;
+  background-blend-mode: lighten;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
 /* Allgemeine Styles */
 .container {
   max-width: 900px;
   margin: 2rem auto;
   padding: 2rem;
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.968);
   border-radius: 16px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  font-family: "Roboto", sans-serif;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 header {
@@ -217,29 +241,31 @@ header {
 }
 
 header h1 {
-  font-size: 2rem;
-  color: #333;
+  font-size: 2.5rem;
+  color: #5d4037; /* Dunkelbraun */
+  margin-bottom: 0.5rem;
+  font-family: "Pacifico", cursive;
 }
 
 header p {
-  font-size: 1rem;
-  color: #666;
+  font-size: 1.2rem;
+  color: #6d4c41; /* Mittelbraun */
 }
 
 header .connected {
-  color: #28a745;
+  color: #388e3c; /* Grün für Verbunden */
 }
 
 header .error {
-  color: #dc3545;
+  color: #d32f2f; /* Rot für Fehler */
 }
 
 header .offline {
-  color: #ffc107;
+  color: #fbc02d; /* Gelb für Offline */
 }
 
 header .reconnecting {
-  color: #17a2b8;
+  color: #1976d2; /* Blau für Wiederverbinden */
 }
 
 /* Klappen-Layout */
@@ -251,22 +277,23 @@ header .reconnecting {
 
 /* Klappe-Karte */
 .klappe-card {
-  background-color: #f9f9f9;
+  background-color: #ffe0b2; /* Helles Braun-Orange */
   padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  border: 2px solid #bcaaa4; /* Mittelbraun */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .klappe-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
 }
 
 .klappe-card h2 {
   margin-top: 0;
-  color: #007bff;
-  font-size: 1.5rem;
+  color: #5d4037; /* Dunkelbraun */
+  font-size: 1.8rem;
   margin-bottom: 1rem;
 }
 
@@ -285,21 +312,21 @@ header .reconnecting {
 
 .input-group label {
   margin-bottom: 0.5rem;
-  color: #555;
+  color: #5d4037; /* Dunkelbraun */
   font-weight: 500;
 }
 
 .input-group input {
   padding: 0.75rem;
-  border: 1px solid #ccc;
+  border: 1px solid #bcaaa4; /* Mittelbraun */
   border-radius: 8px;
   font-size: 1rem;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 .input-group input:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+  border-color: #6d4c41; /* Mittelbraun */
+  box-shadow: 0 0 5px rgba(109, 76, 65, 0.5);
   outline: none;
 }
 
@@ -308,32 +335,33 @@ header .reconnecting {
   display: block;
   width: 100%;
   padding: 0.75rem;
-  background-color: #007bff;
+  background-color: #6d4c41; /* Mittelbraun */
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 1.1rem;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.2s;
+  transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
   margin: 2rem 0;
 }
 
 .send-button:hover {
-  background-color: #0056b3;
+  background-color: #5d4037; /* Dunkelbraun */
   transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 /* Nachrichtenbereich */
 .messages {
-  background-color: #f1f1f1;
+  background-color: #6d4c4191; /* Helles Braun-Orange */
   padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .messages h3 {
   margin-top: 0;
-  color: #333;
+  color: #5d4037; /* Dunkelbraun */
   margin-bottom: 1rem;
 }
 
@@ -349,9 +377,9 @@ header .reconnecting {
   flex-wrap: wrap;
   align-items: center;
   padding: 0.5rem;
-  background: #ffffff;
+  background: #fff8e1; /* Sehr helles Braun-Orange */
   margin-bottom: 0.5rem;
-  border-left: 4px solid #007bff;
+  border-left: 4px solid #6d4c41; /* Mittelbraun */
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-size: 0.9rem;
@@ -359,33 +387,33 @@ header .reconnecting {
 
 .message-topic {
   font-weight: 600;
-  color: #007bff;
+  color: #6d4c41; /* Mittelbraun */
   margin-right: 0.5rem;
 }
 
 .message-content {
-  color: #555;
+  color: #5d4037; /* Dunkelbraun */
   word-break: break-word;
 }
 
 /* Statusfarben */
 .connected {
-  color: #28a745;
+  color: #388e3c; /* Grün für Verbunden */
   font-weight: bold;
 }
 
 .error {
-  color: #dc3545;
+  color: #d32f2f; /* Rot für Fehler */
   font-weight: bold;
 }
 
 .offline {
-  color: #ffc107;
+  color: #fbc02d; /* Gelb für Offline */
   font-weight: bold;
 }
 
 .reconnecting {
-  color: #17a2b8;
+  color: #1976d2; /* Blau für Wiederverbinden */
   font-weight: bold;
 }
 

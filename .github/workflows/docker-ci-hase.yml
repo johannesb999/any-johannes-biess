@@ -15,7 +15,7 @@ name: prod docker ci (@itmr.dev/bump)
 on:
   push:
     branches:
-      - hase
+      - Hase
 
 permissions:
   packages: write
@@ -37,7 +37,7 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:hase
+            ghcr.io/${{ github.repository }}:Hase
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:run-${{ github.run_id }}-${{ github.run_attempt }}
             ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
