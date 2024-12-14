@@ -8,7 +8,7 @@
         rel="stylesheet"
       />
 
-      <title>KissenApp</title>
+      <title>Hasenfutter</title>
     </head>
     <NuxtPage />
 
