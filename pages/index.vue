@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <header>
-      <h1>Hasel Füttern</h1>
+      <h1>HAZEL FÜTTERN</h1>
       <p>
         Status:
         <span :class="connectionStatusClass">{{ connectionStatus }}</span>
@@ -32,7 +32,7 @@
       </div>
     </div>
 
-    <button class="send-button" @click="checkPasswordBefore(sendMessage)">
+    <button class="send-button" @click="checklochBefore(sendMessage)">
       Senden
     </button>
 
@@ -89,7 +89,7 @@ export default {
         },
       ],
       topicBase: "hasel",
-      brokerUrl: "wss://mqtt.hfg.design:443/mqtt",
+      brokerUrl: "wss://mqtt.simplejb.com:443/mqtt",
       connectionStatus: "Nicht verbunden",
       messages: [], // Array von Nachrichtenobjekten
     };
@@ -153,7 +153,7 @@ export default {
           this.client.publish(
             `${this.topicBase}/klappe${klappe.id}/date`,
             klappe.date,
-            {},
+            { retain: true }, // Retained-Flag gesetzt
             (err) => {
               if (err) {
                 console.error(
@@ -162,7 +162,7 @@ export default {
                 );
               } else {
                 console.log(
-                  `Klappe ${klappe.id} Datum gesendet: ${klappe.date}`
+                  `Klappe ${klappe.id} Datum gesendet (Retained): ${klappe.date}`
                 );
               }
             }
@@ -172,7 +172,7 @@ export default {
           this.client.publish(
             `${this.topicBase}/klappe${klappe.id}/time`,
             klappe.time,
-            {},
+            { retain: true }, // Retained-Flag gesetzt
             (err) => {
               if (err) {
                 console.error(
@@ -181,7 +181,7 @@ export default {
                 );
               } else {
                 console.log(
-                  `Klappe ${klappe.id} Uhrzeit gesendet: ${klappe.time}`
+                  `Klappe ${klappe.id} Uhrzeit gesendet (Retained): ${klappe.time}`
                 );
               }
             }
@@ -189,12 +189,12 @@ export default {
         });
 
         // Optional: Feedback an den Nutzer
-        alert("Daten erfolgreich gesendet!");
+        alert("Daten erfolgreich gesendet und gespeichert!");
       } else {
         alert("MQTT-Client ist nicht verbunden.");
       }
     },
-    checkPasswordBefore(action) {
+    checklochBefore(action) {
       const input = prompt("Eingabe:");
       if (input === this.loch) {
         action();
