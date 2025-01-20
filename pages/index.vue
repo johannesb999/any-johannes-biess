@@ -1,16 +1,35 @@
 <template>
   <div class="app-container">
-    <!-- Splash Screen -->
-    <div class="splash-screen" v-if="showSplash">
+    <!-- ========== STEP 0: SPLASH SCREEN ========== -->
+    <div v-if="step === 0" class="splash-screen">
       <div class="splash-content">
-
         <img class="pillow-icon-splash" src="public/docs/loader.svg" alt="Pillow icon" />
       </div>
     </div>
 
-    <!-- Hauptbildschirm -->
-    <div class="main-screen" v-else>
-      <!-- Header mit zzz links und Dream On mittig -->
+    <!-- ========== STEP 1: MANUAL QR-SCAN ========== -->
+    <div v-else-if="step === 1">
+      <!-- Nur im Client => SSR mag kein Kamera-Zugriff -->
+      <client-only>
+        <div class="qr-scan-screen">
+          <h2>QR-Code scannen (manuell mit jsQR)</h2>
+          <p>Bitte richte deine Kamera auf den Kissen-QR-Code.</p>
+
+          <!-- Video-Preview (Kamera-Live) -->
+          <video ref="videoRef" class="camera-preview" playsinline muted autoplay></video>
+
+          <!-- Canvas im Hintergrund zum Auslesen der Frames, kann hidden sein -->
+          <canvas ref="canvasRef" class="scan-canvas" width="300" height="300"></canvas>
+
+          <!-- Optionaler Skip-Knopf, falls du keinen QR zur Hand hast -->
+          <button @click="skipScan" class="skip-btn">Überspringen (Test)</button>
+        </div>
+      </client-only>
+    </div>
+
+    <!-- ========== STEP 2: MAIN-SCREEN ========== -->
+    <div v-else class="main-screen">
+      <!-- Header -->
       <header class="app-header">
         <img class="zzz-header" src="public/docs/zzz.svg" alt="zzz icon" />
         <h1 class="header-title">DREAM ON</h1>
@@ -21,14 +40,14 @@
         <!-- Kissen -->
         <div class="pillow-section">
           <img class="pillow-icon-main" src="public/docs/pillow.svg" alt="Pillow icon" />
-          <p class="pillow-status">Kissen CT-3000 Verbunden</p>
+          <p class="pillow-status">
+            Kissen {{ pillowId }} Verbunden
+          </p>
         </div>
 
         <!-- Time Picker -->
         <div class="time-section" @click="showTimePicker = true">
-          <div class="time-display">
-            {{ formattedHour }} : {{ formattedMinute }}
-          </div>
+          <div class="time-display">{{ formattedHour }} : {{ formattedMinute }}</div>
           <div class="time-subtitle">Wake up Time</div>
         </div>
 
@@ -84,142 +103,283 @@
   </div>
 </template>
 
-<script>
-import mqtt from "mqtt";
+<script setup>
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import mqtt from 'mqtt'
 
-export default {
-  data() {
-    return {
-      // MQTT
-      client: null,
-      topicBase: "johannes",
-      brokerUrl: "wss://mqtt.hfg.design:443/mqtt",
+// WICHTIG: Damit SSR nicht meckert, laden wir jsQR erst im Browser:
+let jsQR = null
 
-      // Splash
-      showSplash: true,
+// Steps: 0=Splash, 1=QR-Scan, 2=Main
+const step = ref(0)
+const pillowId = ref('CT-3000')
 
-      // Zeit
-      hour: 7,
-      minute: 15,
-      showTimePicker: false,
+// UI States
+const showTimePicker = ref(false)
+const showCheckOverlay = ref(false)
 
-      // Temperatur
-      temp: 45,
+// Zeit & Temperatur
+const hour = ref(7)
+const minute = ref(15)
+const temp = ref(45)
 
-      // Grüner Haken Overlay
-      showCheckOverlay: false,
-    };
-  },
-  computed: {
-    formattedHour() {
-      return String(this.hour).padStart(2, "0");
-    },
-    formattedMinute() {
-      return String(this.minute).padStart(2, "0");
-    },
-    minutePadded() {
-      return String(this.minute).padStart(2, "0");
-    },
-  },
-  mounted() {
-    // Splash ausblenden nach 1.5s
-    setTimeout(() => {
-      this.showSplash = false;
-    }, 700);
+// MQTT
+const brokerUrl = 'wss://mqtt.hfg.design:443/mqtt'
+const client = ref(null)
 
-    // Uhrzeit = jetzt +1 Min
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + 1);
-    this.hour = now.getHours();
-    this.minute = now.getMinutes();
+// Refs für Video & Canvas
+const videoRef = ref(null)
+const canvasRef = ref(null)
 
-    // MQTT Connect
-    this.client = mqtt.connect(this.brokerUrl);
-    this.client.on("connect", () => {
-      console.log("MQTT verbunden");
-      this.client.subscribe(`${this.topicBase}/#`, (err) => {
-        if (err) {
-          console.error("Fehler beim Abonnieren:", err);
-        }
-      });
-    });
-    this.client.on("error", (error) => {
-      console.error("MQTT-Fehler:", error);
-    });
-    this.client.on("offline", () => {
-      console.warn("MQTT offline");
-    });
-    this.client.on("reconnect", () => {
-      console.log("MQTT reconnect...");
-    });
-    this.client.on("message", (topic, message) => {
-      // Nur Konsole, kein UI
-      console.log(`[MQTT] ${topic}: ${message.toString()}`);
-    });
-  },
-  methods: {
-    // Time-Picker
-    incrementHour() {
-      this.hour = (this.hour + 1) % 24;
-    },
-    decrementHour() {
-      this.hour = (this.hour - 1 + 24) % 24;
-    },
-    incrementMinute() {
-      let newMin = this.minute + 1;
-      if (newMin === 60) {
-        newMin = 0;
-        this.incrementHour();
-      }
-      this.minute = newMin;
-    },
-    decrementMinute() {
-      let newMin = this.minute - 1;
-      if (newMin < 0) {
-        newMin = 59;
-        this.decrementHour();
-      }
-      this.minute = newMin;
-    },
-    applyTime() {
-      this.closeTimePicker();
-    },
-    closeTimePicker() {
-      this.showTimePicker = false;
-    },
+// handleCamera / Animations
+let localStream = null       // Speichern des getUserMedia()-Streams
+let animFrameId = 0          // requestAnimationFrame ID
+let scanningActive = false   // Steuert, ob wir gerade scannen
 
-    // Abschicken => MQTT publizieren, grünes Overlay
-    sendMessage() {
-      if (this.client && this.client.connected) {
-        this.client.publish(`${this.topicBase}/heat`, String(this.temp));
-        this.client.publish(`${this.topicBase}/hour`, String(this.hour));
-        this.client.publish(`${this.topicBase}/minute`, String(this.minute));
-        console.log("Werte gesendet:", {
-          temp: this.temp,
-          hour: this.hour,
-          minute: this.minute,
-        });
-      } else {
-        console.warn("MQTT nicht verbunden. Konnte nicht senden.");
-      }
+// --------------
+// MOUNTED
+// --------------
+onMounted(() => {
+  // Splash => nach 700 ms -> step=1
+  setTimeout(async () => {
+    step.value = 1
+    await initJsQrAndStartCamera()
+  }, 700)
 
-      // Grünes Haken-Overlay anzeigen
-      this.showCheckOverlay = true;
-      setTimeout(() => {
-        this.showCheckOverlay = false;
-      }, 2000);
-    },
-  },
-  beforeUnmount() {
-    if (this.client) {
-      this.client.end();
-    }
-  },
-};
+  // Uhrzeit => jetzt +1 min
+  const now = new Date()
+  now.setMinutes(now.getMinutes() + 1)
+  hour.value = now.getHours()
+  minute.value = now.getMinutes()
+
+  // MQTT Connect
+  client.value = mqtt.connect(brokerUrl)
+  client.value.on('connect', () => {
+    console.log('[MQTT] connected')
+  })
+  client.value.on('error', (err) => {
+    console.error('[MQTT] error', err)
+  })
+  client.value.on('offline', () => {
+    console.warn('[MQTT] offline')
+  })
+  client.value.on('reconnect', () => {
+    console.log('[MQTT] reconnecting...')
+  })
+  client.value.on('message', (topic, message) => {
+    console.log(`[MQTT] message => ${topic}: ${message.toString()}`)
+  })
+})
+
+onUnmounted(() => {
+  // Kamera stoppen
+  stopCamera()
+  // MQTT trennen
+  if (client.value) {
+    client.value.end()
+  }
+})
+
+// --------------
+// initJsQrAndStartCamera
+// --------------
+async function initJsQrAndStartCamera() {
+  console.log('[initJsQrAndStartCamera] loading jsQR dynamically...')
+  const lib = await import('jsqr')         // => { default: [Function: jsQR], ...}
+  jsQR = lib.default || lib.jsQR || null   // Versuche default oder named 
+  if (!jsQR) {
+    console.error('[initJsQrAndStartCamera] jsQR not found in module =>', lib)
+    return
+  }
+  console.log('[initJsQrAndStartCamera] jsQR loaded =>', jsQR)
+
+  // Kamera starten
+  startCamera()
+    .then(() => {
+      console.log('[initJsQrAndStartCamera] camera started => start scanning loop')
+      scanningActive = true
+      scanLoop()
+    })
+    .catch(err => {
+      console.error('[initJsQrAndStartCamera] could not start camera:', err)
+    })
+}
+
+// --------------
+// Start Camera
+// --------------
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('getUserMedia not supported in this browser!')
+  }
+  console.log('[startCamera] requesting getUserMedia...')
+  localStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment' },
+    audio: false
+  })
+
+  if (!videoRef.value) {
+    throw new Error('videoRef is not available in DOM yet!')
+  }
+
+  // Video befüllen
+  videoRef.value.srcObject = localStream
+  await videoRef.value.play()
+  console.log('[startCamera] video playing...')
+}
+
+// --------------
+// Stop Camera
+// --------------
+function stopCamera() {
+  scanningActive = false
+  cancelAnimationFrame(animFrameId)
+  if (videoRef.value) {
+    videoRef.value.pause()
+    videoRef.value.srcObject = null
+  }
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop())
+    localStream = null
+  }
+}
+
+// --------------
+// scanLoop
+// --------------
+function scanLoop() {
+  if (!scanningActive) return
+
+  const video = videoRef.value
+  const canvas = canvasRef.value
+  if (!video || !canvas) {
+    animFrameId = requestAnimationFrame(scanLoop)
+    return
+  }
+
+  const ctx = canvas.getContext('2d')
+  // Canvas = Video-Größe anpassen
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  // Draw current Frame
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+  // Pixel holen & jsQR checken
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  const code = jsQR(imageData.data, canvas.width, canvas.height)
+
+  if (code?.data) {
+    console.log('[scanLoop] found QR =>', code.data)
+    // => Pillow-Id
+    pillowId.value = code.data
+    // => ab zu Main-Screen
+    stopCamera()
+    step.value = 2
+    subscribeToPillowId(code.data)
+    return
+  }
+
+  // Nächsten Frame
+  animFrameId = requestAnimationFrame(scanLoop)
+}
+
+// --------------
+// subscribeToPillowId
+// --------------
+function subscribeToPillowId(id) {
+  if (client.value && client.value.connected) {
+    client.value.subscribe(`${id}/#`, err => {
+      if (err) console.error('[subscribeToPillowId] error =>', err)
+      else console.log(`[subscribeToPillowId] subscribed to ${id}/#`)
+    })
+  } else {
+    console.warn('[subscribeToPillowId] not connected yet')
+  }
+}
+
+// --------------
+// Skip-Scan
+// --------------
+function skipScan() {
+  console.log('[skipScan] => Setting pillowId=TEST-1234')
+  pillowId.value = 'TEST-1234'
+  step.value = 2
+  stopCamera()
+  subscribeToPillowId('TEST-1234')
+}
+
+// --------------
+// Zeit-Funktionen
+// --------------
+function incrementHour() {
+  hour.value = (hour.value + 1) % 24
+}
+function decrementHour() {
+  hour.value = (hour.value - 1 + 24) % 24
+}
+function incrementMinute() {
+  let newMin = minute.value + 1
+  if (newMin === 60) {
+    newMin = 0
+    incrementHour()
+  }
+  minute.value = newMin
+}
+function decrementMinute() {
+  let newMin = minute.value - 1
+  if (newMin < 0) {
+    newMin = 59
+    decrementHour()
+  }
+  minute.value = newMin
+}
+function applyTime() {
+  closeTimePicker()
+}
+function closeTimePicker() {
+  showTimePicker.value = false
+}
+
+// --------------
+// MQTT - Senden
+// --------------
+function sendMessage() {
+  if (!pillowId.value) {
+    console.warn('[sendMessage] no pillowId => cannot send')
+    return
+  }
+  if (client.value && client.value.connected) {
+    client.value.publish(`${pillowId.value}/heat`, String(temp.value))
+    client.value.publish(`${pillowId.value}/hour`, String(hour.value))
+    client.value.publish(`${pillowId.value}/minute`, String(minute.value))
+    console.log('[sendMessage] published =>', {
+      pillowId: pillowId.value,
+      temp: temp.value,
+      hour: hour.value,
+      minute: minute.value
+    })
+  } else {
+    console.warn('[sendMessage] MQTT not connected => cannot publish')
+  }
+
+  // Grünes Haken-Overlay
+  showCheckOverlay.value = true
+  setTimeout(() => {
+    showCheckOverlay.value = false
+  }, 2000)
+}
+
+// --------------
+// Computed
+// --------------
+const formattedHour = computed(() => String(hour.value).padStart(2, '0'))
+const formattedMinute = computed(() => String(minute.value).padStart(2, '0'))
+const minutePadded = computed(() => String(minute.value).padStart(2, '0'))
 </script>
 
 <style scoped>
-/* ========== BASIS ========== */
+/* Basis-Styles wie gehabt... */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -236,7 +396,7 @@ export default {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* ========== SPLASH SCREEN ========== */
+/* SPLASH SCREEN */
 .splash-screen {
   flex: 1;
   display: flex;
@@ -251,21 +411,39 @@ export default {
   align-items: flex-start;
 }
 
-/* ZzZ-SVG */
-.zzz-splash {
-  position: absolute;
-  top: 0;
-  left: -40px;
-  width: 40px;
-  height: auto;
-  transform: rotate(-20deg);
+/* QR-SCAN */
+.qr-scan-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
 }
 
-/* DREAM / ON / Pillow im Splash */
+.camera-preview {
+  width: 300px;
+  height: 300px;
+  border: 2px solid #444;
+  object-fit: cover;
+  background: #000;
+}
 
+.scan-canvas {
+  display: none;
+  /* kann man auch zeigen für Debug */
+}
 
+.skip-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: #999;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
 
-/* ========== MAIN SCREEN ========== */
+/* MAIN SCREEN */
 .main-screen {
   flex: 1;
   display: flex;
@@ -273,7 +451,6 @@ export default {
   position: relative;
 }
 
-/* Header */
 .app-header {
   position: relative;
   text-align: center;
@@ -296,7 +473,6 @@ export default {
   margin: 0;
 }
 
-/* Inhalt mit 10rem Abstand */
 .content {
   flex: 1;
   margin-top: 5rem;
@@ -306,7 +482,7 @@ export default {
   position: relative;
 }
 
-/* ========== KISSEN-SEKTION ========== */
+/* Kissen */
 .pillow-section {
   text-align: center;
 }
@@ -327,7 +503,7 @@ export default {
   margin-right: auto;
 }
 
-/* ========== TIME-PICKER ANZEIGE ========== */
+/* TIME-PICKER ANZEIGE */
 .time-section {
   margin-top: 5rem;
   text-align: center;
@@ -345,7 +521,7 @@ export default {
   color: #999;
 }
 
-/* ========== TEMPERATUR ========== */
+/* TEMPERATUR */
 .temp-section {
   margin-top: 7rem;
   text-align: center;
@@ -354,7 +530,6 @@ export default {
 .temp-slider {
   width: 250px;
   margin-bottom: 0.5rem;
-  -webkit-appearance: none;
   appearance: none;
   height: 10px;
   border-radius: 5px;
@@ -363,24 +538,6 @@ export default {
   cursor: pointer;
 }
 
-.temp-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  background: #fff;
-  border: 1px solid #888;
-  border-radius: 50%;
-}
-
-.temp-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: #fff;
-  border: 1px solid #888;
-  border-radius: 50%;
-}
-
-/* Temperatur-Wert & Label daneben */
 .temp-info {
   display: flex;
   gap: 0.5rem;
@@ -399,7 +556,7 @@ export default {
   color: #555;
 }
 
-/* ========== BUTTON ========== */
+/* BUTTON */
 .submit-button {
   margin-top: auto;
   margin-bottom: auto;
@@ -431,7 +588,7 @@ export default {
   text-decoration: underline;
 }
 
-/* ========== TIME PICKER OVERLAY ========== */
+/* TIME PICKER OVERLAY */
 .time-picker-overlay {
   position: fixed;
   top: 0;
@@ -454,12 +611,6 @@ export default {
   text-align: center;
 }
 
-.time-picker-dialog h2 {
-  margin-bottom: 12px;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-
 .dialog-content {
   display: flex;
   align-items: center;
@@ -472,16 +623,9 @@ export default {
   text-align: center;
 }
 
-.dialog-col label {
-  font-size: 0.8rem;
-  color: #666;
-  display: block;
-  margin-bottom: 4px;
-}
-
 .arrow {
   font-size: 1.2rem;
-  color: #000000;
+  color: #000;
   cursor: pointer;
   margin: 2px 0;
   user-select: none;
@@ -504,7 +648,7 @@ export default {
 }
 
 .dialog-ok {
-  background: #000000;
+  background: #000;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -518,7 +662,7 @@ export default {
   background: #525252;
 }
 
-/* ========== GRÜNER HAKEN OVERLAY ========== */
+/* GRÜNER HAKEN OVERLAY */
 .check-overlay {
   position: fixed;
   top: 0;
@@ -551,7 +695,6 @@ export default {
   font-weight: 700;
 }
 
-/* Kleiner Popup-Effekt */
 @keyframes popIn {
   from {
     transform: scale(0.8);
