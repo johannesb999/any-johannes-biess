@@ -1,32 +1,16 @@
 <template>
   <div class="app-container">
-    <!-- ========== STEP 0: SPLASH SCREEN ========== -->
-    <div v-if="step === 0" class="splash-screen">
+    <!-- Splash Screen -->
+    <div class="splash-screen" v-if="showSplash">
       <div class="splash-content">
+
         <img class="pillow-icon-splash" src="public/docs/loader.svg" alt="Pillow icon" />
       </div>
     </div>
 
-    <!-- ========== STEP 1: QR-SCAN SCREEN ========== -->
-    <div v-else-if="step === 1">
-      <!-- Nur der umschließende div erhält v-else-if -->
-      <client-only>
-        <!-- Innerhalb dieses div kommt der Kamera-Scan -->
-        <div class="qr-scan-screen">
-          <h2>QR-Code scannen</h2>
-          <p>Bitte richte deine Kamera auf den Kissen-QR-Code.</p>
-
-          <video ref="videoRef" class="camera-preview" />
-
-          <!-- Optionaler Skip-Button zum Testen -->
-          <button @click="skipScan" class="skip-btn">Überspringen (Test)</button>
-        </div>
-      </client-only>
-    </div>
-
-    <!-- ========== STEP 2: MAIN SCREEN ========== -->
-    <div v-else class="main-screen">
-      <!-- Header -->
+    <!-- Hauptbildschirm -->
+    <div class="main-screen" v-else>
+      <!-- Header mit zzz links und Dream On mittig -->
       <header class="app-header">
         <img class="zzz-header" src="public/docs/zzz.svg" alt="zzz icon" />
         <h1 class="header-title">DREAM ON</h1>
@@ -37,13 +21,14 @@
         <!-- Kissen -->
         <div class="pillow-section">
           <img class="pillow-icon-main" src="public/docs/pillow.svg" alt="Pillow icon" />
-          <!-- Dynamische ID -->
-          <p class="pillow-status">Kissen {{ pillowId }} Verbunden</p>
+          <p class="pillow-status">Kissen CT-3000 Verbunden</p>
         </div>
 
         <!-- Time Picker -->
         <div class="time-section" @click="showTimePicker = true">
-          <div class="time-display">{{ formattedHour }} : {{ formattedMinute }}</div>
+          <div class="time-display">
+            {{ formattedHour }} : {{ formattedMinute }}
+          </div>
           <div class="time-subtitle">Wake up Time</div>
         </div>
 
@@ -64,7 +49,7 @@
       <a class="help-link" href="/help">Hilfe</a>
     </div>
 
-    <!-- ========== Zeit-Picker Overlay ========== -->
+    <!-- Zeit-Picker Overlay -->
     <div v-if="showTimePicker" class="time-picker-overlay" @click.self="closeTimePicker">
       <div class="time-picker-dialog">
         <h2>Zeit einstellen</h2>
@@ -89,7 +74,7 @@
       </div>
     </div>
 
-    <!-- ========== Grüner Haken + "Sleep well" Overlay ========== -->
+    <!-- Grüner Haken + "Sleep well" Overlay -->
     <div v-if="showCheckOverlay" class="check-overlay">
       <div class="check-container">
         <img src="public/docs/zzzCheck.svg" alt="zzzCheck" class="check-icon" />
@@ -99,191 +84,141 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import mqtt from 'mqtt'
+<script>
+import mqtt from "mqtt";
 
-// --------------------------
-// 1) Steps & globale States
-// --------------------------
-const step = ref(0)                // 0 = Splash, 1 = QR-Scan, 2 = Main
-const pillowId = ref('CT-3000')    // Standard oder Platzhalter
+export default {
+  data() {
+    return {
+      // MQTT
+      client: null,
+      topicBase: "johannes",
+      brokerUrl: "wss://mqtt.hfg.design:443/mqtt",
 
-const showSplash = ref(true)
-const showTimePicker = ref(false)
-const showCheckOverlay = ref(false)
+      // Splash
+      showSplash: true,
 
-// Zeit/Temp
-const hour = ref(7)
-const minute = ref(15)
-const temp = ref(45)
+      // Zeit
+      hour: 7,
+      minute: 15,
+      showTimePicker: false,
 
-// MQTT
-const brokerUrl = 'wss://mqtt.hfg.design:443/mqtt'
-const client = ref(null)
+      // Temperatur
+      temp: 45,
 
-// --------------------------
-// 2) QR-Reader (Dynamic Import)
-// --------------------------
-const videoRef = ref(null)
-let start, stop, decodedResult, isSupported
-const skipScan = () => {
-  // Lokaltest ohne echten QR
-  pillowId.value = 'TEST-1234'
-  subscribeToPillowId(pillowId.value)
-  if (stop) stop()
-  step.value = 2
-}
+      // Grüner Haken Overlay
+      showCheckOverlay: false,
+    };
+  },
+  computed: {
+    formattedHour() {
+      return String(this.hour).padStart(2, "0");
+    },
+    formattedMinute() {
+      return String(this.minute).padStart(2, "0");
+    },
+    minutePadded() {
+      return String(this.minute).padStart(2, "0");
+    },
+  },
+  mounted() {
+    // Splash ausblenden nach 1.5s
+    setTimeout(() => {
+      this.showSplash = false;
+    }, 700);
 
-async function initScanner() {
-  const { useQrReader } = await import('vue3-qr-reader')
-  const scanner = useQrReader({
-    video: videoRef,
-    constraints: {
-      facingMode: 'environment'
+    // Uhrzeit = jetzt +1 Min
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    this.hour = now.getHours();
+    this.minute = now.getMinutes();
+
+    // MQTT Connect
+    this.client = mqtt.connect(this.brokerUrl);
+    this.client.on("connect", () => {
+      console.log("MQTT verbunden");
+      this.client.subscribe(`${this.topicBase}/#`, (err) => {
+        if (err) {
+          console.error("Fehler beim Abonnieren:", err);
+        }
+      });
+    });
+    this.client.on("error", (error) => {
+      console.error("MQTT-Fehler:", error);
+    });
+    this.client.on("offline", () => {
+      console.warn("MQTT offline");
+    });
+    this.client.on("reconnect", () => {
+      console.log("MQTT reconnect...");
+    });
+    this.client.on("message", (topic, message) => {
+      // Nur Konsole, kein UI
+      console.log(`[MQTT] ${topic}: ${message.toString()}`);
+    });
+  },
+  methods: {
+    // Time-Picker
+    incrementHour() {
+      this.hour = (this.hour + 1) % 24;
+    },
+    decrementHour() {
+      this.hour = (this.hour - 1 + 24) % 24;
+    },
+    incrementMinute() {
+      let newMin = this.minute + 1;
+      if (newMin === 60) {
+        newMin = 0;
+        this.incrementHour();
+      }
+      this.minute = newMin;
+    },
+    decrementMinute() {
+      let newMin = this.minute - 1;
+      if (newMin < 0) {
+        newMin = 59;
+        this.decrementHour();
+      }
+      this.minute = newMin;
+    },
+    applyTime() {
+      this.closeTimePicker();
+    },
+    closeTimePicker() {
+      this.showTimePicker = false;
+    },
+
+    // Abschicken => MQTT publizieren, grünes Overlay
+    sendMessage() {
+      if (this.client && this.client.connected) {
+        this.client.publish(`${this.topicBase}/heat`, String(this.temp));
+        this.client.publish(`${this.topicBase}/hour`, String(this.hour));
+        this.client.publish(`${this.topicBase}/minute`, String(this.minute));
+        console.log("Werte gesendet:", {
+          temp: this.temp,
+          hour: this.hour,
+          minute: this.minute,
+        });
+      } else {
+        console.warn("MQTT nicht verbunden. Konnte nicht senden.");
+      }
+
+      // Grünes Haken-Overlay anzeigen
+      this.showCheckOverlay = true;
+      setTimeout(() => {
+        this.showCheckOverlay = false;
+      }, 2000);
+    },
+  },
+  beforeUnmount() {
+    if (this.client) {
+      this.client.end();
     }
-  })
-  start = scanner.start
-  stop = scanner.stop
-  decodedResult = scanner.decodedResult
-  isSupported = scanner.isSupported
-
-  // QR-Code beobachten
-  watch(decodedResult, (val) => {
-    if (val) {
-      console.log('QR gefunden:', val)
-      pillowId.value = val
-      subscribeToPillowId(val)
-      // Stop + Wechsel
-      stop()
-      step.value = 2
-    }
-  })
-}
-
-// MQTT-Subscribe, wenn eine pillowId da ist
-function subscribeToPillowId(id) {
-  if (client.value && client.value.connected) {
-    client.value.subscribe(`${id}/#`, (err) => {
-      if (err) console.error('MQTT-Subscribe Fehler:', err)
-      else console.log('Abonniere Topic:', `${id}/#`)
-    })
-  }
-}
-
-// --------------------------
-// 3) Lifecycle
-// --------------------------
-onMounted(() => {
-  // a) Splash → nach 700ms => QR
-  setTimeout(async () => {
-    step.value = 1
-    await initScanner()
-    if (isSupported) start()
-  }, 700)
-
-  // b) Uhrzeit = jetzt +1 Min
-  const now = new Date()
-  now.setMinutes(now.getMinutes() + 1)
-  hour.value = now.getHours()
-  minute.value = now.getMinutes()
-
-  // c) MQTT connect
-  client.value = mqtt.connect(brokerUrl)
-  client.value.on('connect', () => {
-    console.log('MQTT verbunden')
-  })
-  client.value.on('error', (err) => {
-    console.error('MQTT-Fehler:', err)
-  })
-  client.value.on('offline', () => {
-    console.warn('MQTT offline')
-  })
-  client.value.on('reconnect', () => {
-    console.log('MQTT reconnect...')
-  })
-  client.value.on('message', (topic, message) => {
-    console.log(`[MQTT] ${topic}: ${message.toString()}`)
-  })
-})
-
-onUnmounted(() => {
-  // Kamera
-  if (stop) stop()
-  // MQTT
-  if (client.value) client.value.end()
-})
-
-// --------------------------
-// 4) Computed
-// --------------------------
-const formattedHour = computed(() => String(hour.value).padStart(2, '0'))
-const formattedMinute = computed(() => String(minute.value).padStart(2, '0'))
-const minutePadded = computed(() => String(minute.value).padStart(2, '0'))
-
-// --------------------------
-// 5) Methoden
-// --------------------------
-function incrementHour() {
-  hour.value = (hour.value + 1) % 24
-}
-function decrementHour() {
-  hour.value = (hour.value - 1 + 24) % 24
-}
-function incrementMinute() {
-  let newMin = minute.value + 1
-  if (newMin === 60) {
-    newMin = 0
-    incrementHour()
-  }
-  minute.value = newMin
-}
-function decrementMinute() {
-  let newMin = minute.value - 1
-  if (newMin < 0) {
-    newMin = 59
-    decrementHour()
-  }
-  minute.value = newMin
-}
-function applyTime() {
-  closeTimePicker()
-}
-function closeTimePicker() {
-  showTimePicker.value = false
-}
-
-// Abschicken => MQTT
-function sendMessage() {
-  if (!pillowId.value) {
-    console.warn('Keine pillowId. Abbruch.')
-    return
-  }
-  if (client.value && client.value.connected) {
-    client.value.publish(`${pillowId.value}/heat`, String(temp.value))
-    client.value.publish(`${pillowId.value}/hour`, String(hour.value))
-    client.value.publish(`${pillowId.value}/minute`, String(minute.value))
-    console.log('Gesendet:', {
-      pillowId: pillowId.value,
-      temp: temp.value,
-      hour: hour.value,
-      minute: minute.value,
-    })
-  } else {
-    console.warn('MQTT nicht verbunden, kann nicht senden.')
-  }
-
-  // Overlay
-  showCheckOverlay.value = true
-  setTimeout(() => {
-    showCheckOverlay.value = false
-  }, 2000)
-}
+  },
+};
 </script>
 
 <style scoped>
-/* Deine bisherigen Styles... (leicht gekürzt) */
-
 /* ========== BASIS ========== */
 * {
   box-sizing: border-box;
@@ -316,6 +251,20 @@ function sendMessage() {
   align-items: flex-start;
 }
 
+/* ZzZ-SVG */
+.zzz-splash {
+  position: absolute;
+  top: 0;
+  left: -40px;
+  width: 40px;
+  height: auto;
+  transform: rotate(-20deg);
+}
+
+/* DREAM / ON / Pillow im Splash */
+
+
+
 /* ========== MAIN SCREEN ========== */
 .main-screen {
   flex: 1;
@@ -347,6 +296,7 @@ function sendMessage() {
   margin: 0;
 }
 
+/* Inhalt mit 10rem Abstand */
 .content {
   flex: 1;
   margin-top: 5rem;
@@ -356,7 +306,7 @@ function sendMessage() {
   position: relative;
 }
 
-/* KISSEN-SEKTION */
+/* ========== KISSEN-SEKTION ========== */
 .pillow-section {
   text-align: center;
 }
@@ -377,7 +327,7 @@ function sendMessage() {
   margin-right: auto;
 }
 
-/* TIME-PICKER ANZEIGE */
+/* ========== TIME-PICKER ANZEIGE ========== */
 .time-section {
   margin-top: 5rem;
   text-align: center;
@@ -395,7 +345,7 @@ function sendMessage() {
   color: #999;
 }
 
-/* TEMPERATUR */
+/* ========== TEMPERATUR ========== */
 .temp-section {
   margin-top: 7rem;
   text-align: center;
@@ -430,6 +380,7 @@ function sendMessage() {
   border-radius: 50%;
 }
 
+/* Temperatur-Wert & Label daneben */
 .temp-info {
   display: flex;
   gap: 0.5rem;
@@ -448,7 +399,7 @@ function sendMessage() {
   color: #555;
 }
 
-/* BUTTON */
+/* ========== BUTTON ========== */
 .submit-button {
   margin-top: auto;
   margin-bottom: auto;
@@ -480,7 +431,7 @@ function sendMessage() {
   text-decoration: underline;
 }
 
-/* TIME PICKER OVERLAY */
+/* ========== TIME PICKER OVERLAY ========== */
 .time-picker-overlay {
   position: fixed;
   top: 0;
@@ -503,6 +454,12 @@ function sendMessage() {
   text-align: center;
 }
 
+.time-picker-dialog h2 {
+  margin-bottom: 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
 .dialog-content {
   display: flex;
   align-items: center;
@@ -515,9 +472,16 @@ function sendMessage() {
   text-align: center;
 }
 
+.dialog-col label {
+  font-size: 0.8rem;
+  color: #666;
+  display: block;
+  margin-bottom: 4px;
+}
+
 .arrow {
   font-size: 1.2rem;
-  color: #000;
+  color: #000000;
   cursor: pointer;
   margin: 2px 0;
   user-select: none;
@@ -540,7 +504,7 @@ function sendMessage() {
 }
 
 .dialog-ok {
-  background: #000;
+  background: #000000;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -554,7 +518,7 @@ function sendMessage() {
   background: #525252;
 }
 
-/* GRÜNER HAKEN OVERLAY */
+/* ========== GRÜNER HAKEN OVERLAY ========== */
 .check-overlay {
   position: fixed;
   top: 0;
@@ -587,6 +551,7 @@ function sendMessage() {
   font-weight: 700;
 }
 
+/* Kleiner Popup-Effekt */
 @keyframes popIn {
   from {
     transform: scale(0.8);
@@ -597,32 +562,5 @@ function sendMessage() {
     transform: scale(1);
     opacity: 1;
   }
-}
-
-/* ========== QR-SCAN SCREEN ========== */
-.qr-scan-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-}
-
-.camera-preview {
-  width: 300px;
-  height: 300px;
-  border: 2px solid #444;
-  margin: 1rem 0;
-  object-fit: cover;
-}
-
-.skip-btn {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: #999;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  border-radius: 6px;
 }
 </style>
