@@ -48,12 +48,13 @@
           </p>
         </div>
 
-        <!-- Time Picker: Direkt der native Timepicker -->
+        <!-- Time Picker: Native Timepicker, erscheint nur beim Klicken auf den Bereich -->
         <label class="time-section" for="time-input">
           <div class="time-display">{{ formattedHour }} : {{ formattedMinute }}</div>
           <div class="time-subtitle">Wake up Time</div>
+          <!-- Der Timepicker wird über das Label gelegt -->
+          <input id="time-input" type="time" v-model="timeValue" class="native-timepicker" />
         </label>
-        <input id="time-input" type="time" v-model="timeValue" class="native-timepicker" />
 
         <!-- Temperatur -->
         <div class="temp-section">
@@ -101,7 +102,7 @@ const hour = ref(7)
 const minute = ref(15)
 const temp = ref(45)
 
-// Computed: Formatierter Zeitwert als "HH:MM"
+// Computed: native Timepicker (HH:MM)
 const timeValue = computed({
   get() {
     return `${String(hour.value).padStart(2, '0')}:${String(minute.value).padStart(2, '0')}`
@@ -132,7 +133,7 @@ let scanningActive = false
 
 // ---------- Lifecycle ----------
 onMounted(() => {
-  // Nach 700ms: Step 1 (QR-Scan) starten
+  // Nach 700ms: zu QR-Scan (Step 1)
   setTimeout(async () => {
     step.value = 1
     await initJsQrAndStartCamera()
@@ -149,7 +150,7 @@ onMounted(() => {
   client.value.on('connect', () => {
     console.log('[MQTT] connected')
   })
-  client.value.on('error', (err) => {
+  client.value.on('error', err => {
     console.error('[MQTT] error', err)
   })
   client.value.on('offline', () => {
@@ -425,7 +426,7 @@ function sendMessage() {
   text-align: center;
   cursor: pointer;
   position: relative;
-  display: block;
+  display: inline-block;
 }
 
 .time-display {
@@ -439,23 +440,16 @@ function sendMessage() {
   color: #999;
 }
 
-/* Native Timepicker Input: möglichst an dein Styling anpassen */
+/* Hier wird der native Timepicker nur über dem Label platziert */
 .native-timepicker {
   position: absolute;
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  opacity: 0;
   cursor: pointer;
-  /* Zusätzliche Styles, die in manchen Browsern übernommen werden (eingeschränkt möglich) */
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 4rem;
-  color: transparent;
-  background: white;
+  z-index: 2;
 }
 
 /* TEMPERATUR */
