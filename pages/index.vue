@@ -119,7 +119,7 @@ const formattedHour = computed(() => String(hour.value).padStart(2, '0'))
 const formattedMinute = computed(() => String(minute.value).padStart(2, '0'))
 
 // MQTT
-const brokerUrl = 'wss://mqtt.hfg.design:443/mqtt'
+const brokerUrl = 'wss://mqtt.simplejb.com:443/mqtt'
 const client = ref(null)
 
 // Refs für Video & Canvas
@@ -146,7 +146,10 @@ onMounted(() => {
   minute.value = now.getMinutes()
 
   // MQTT-Verbindung aufbauen
-  client.value = mqtt.connect(brokerUrl)
+  client.value = mqtt.connect(brokerUrl, {
+    username: `kissen`,
+    password: "stochastisch-häckseln-Wespe-Propeller-7"
+  })
   client.value.on('connect', () => {
     console.log('[MQTT] connected')
   })
