@@ -92,7 +92,7 @@ let jsQR = null
 
 // Schritte: 0 = Splash, 1 = QR-Scan, 2 = Main
 const step = ref(0)
-const pillowId = ref('CT-3000')
+const pillowId = ref('')
 
 // UI States
 const showCheckOverlay = ref(false)
@@ -260,11 +260,11 @@ function subscribeToPillowId(id) {
 }
 
 function skipScan() {
-  console.log('[skipScan] => Setting pillowId = TEST-1234')
-  pillowId.value = 'TEST-1234'
+  console.log('[skipScan] => Setting pillowId = pillow-142587n826-bed3')
+  pillowId.value = 'pillow-142587n826-bed3'
   step.value = 2
   stopCamera()
-  subscribeToPillowId('TEST-1234')
+  subscribeToPillowId('pillow-142587n826-bed3')
 }
 
 // ---------- MQTT: Senden ----------
