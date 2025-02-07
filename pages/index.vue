@@ -25,7 +25,7 @@
           <canvas ref="canvasRef" class="scan-canvas" width="300" height="300"></canvas>
 
           <!-- Skip-Button -->
-          <button @click="skipScan" class="skip-btn">Überspringen (Test)</button>
+          <!-- <button @click="skipScan" class="skip-btn">Überspringen (Test)</button> -->
         </div>
       </client-only>
     </div>
