@@ -6,7 +6,7 @@ name: prod docker ci (@itmr.dev/bump)
 on:
   push:
     branches:
-      - finddate
+      - findadate
 
 permissions:
   packages: write
@@ -28,7 +28,7 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:finddate
+            ghcr.io/${{ github.repository }}:findadate
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:run-${{ github.run_id }}-${{ github.run_attempt }}
             ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
