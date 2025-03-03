@@ -14,8 +14,8 @@ name: prod docker ci (@itmr.dev/bump)
 
 on:
   push:
-    tags:
-      - v*
+    branches:
+      - dateplan
 
 permissions:
   packages: write
@@ -35,9 +35,9 @@ jobs:
       - name: Build and push docker image
         uses: docker/build-push-action@v3
         with:
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:dateplan
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:run-${{ github.run_id }}-${{ github.run_attempt }}
             ghcr.io/${{ github.repository }}:sha-${{ github.sha }}

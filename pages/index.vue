@@ -1,67 +1,92 @@
 <template>
   <div class="page-container">
-    <!-- Vor Kalenderaktivierung: großer Titel & Header -->
+    <!-- Vor Calendaraktivierung: großer Titel & Header -->
     <div v-if="!userPassphrase" class="title">DATEPLAN</div>
     <header v-if="!userPassphrase" class="main-header">
       <div class="header-buttons">
-        <button class="btn" @click="openCreateModal">Create Kalender</button>
-        <button class="btn" @click="openJoinModal">Join Kalender</button>
+        <button class="btn" @click="openCreateModal">Create Calendar</button>
+        <button class="btn" @click="openJoinModal">Join Calendar</button>
       </div>
     </header>
-    <!-- Wenn Kalender aktiv, kleines Logo oben links -->
-    <div v-else class="logo">DP</div>
+    <!-- Wenn Calendar aktiv, kleines Logo oben links und Passphrase oben rechts -->
+    <div v-else class="logo">DATEPLAN</div>
+    <div v-if="userPassphrase" class="passphrase-display" @click="copyPassphraseToClipboard">
+      <div class="passphrase-text">Passphrase: {{ userPassphrase }}</div>
+      <div class="user-name-display">Angemeldet als: {{ currentUser }}</div>
+      <div class="copy-hint" v-if="showCopyHint">Kopiert!</div>
+    </div>
 
-    <!-- Modal: Create Kalender -->
+    <!-- Modal: Create Calendar -->
     <div v-if="isCreateModalOpen" class="modal-overlay">
       <div class="modal-content">
-        <h2>Neuen Kalender erstellen</h2>
+        <h2>Create new Calendar</h2>
         <form @submit.prevent="createCalendar">
           <div>
-            <label for="adminName">Dein Name (Admin):</label>
+            <label for="adminName">Your Name:</label>
             <input class="input" type="text" id="adminName" v-model="newAdminName" required />
           </div>
           <div class="modal-buttons">
-            <button type="submit" class="btn">Erstellen</button>
-            <button type="button" class="btn btn-secondary" @click="closeCreateModal">Abbrechen</button>
+            <button type="button" class="btn btn-secondary" @click="closeCreateModal">cancel</button>
+            <button type="submit" class="btn">Create</button>
           </div>
         </form>
         <div v-if="createdPassphrase" class="modal-result">
-          <p><strong>Kalender erstellt!</strong></p>
+          <p><strong>Calendar created!</strong></p>
           <p><strong>Passphrase: </strong> {{ createdPassphrase }}</p>
           <p>
-            <strong>Einladungslink: </strong>
+            <strong>Invitelink: </strong>
             <a :href="invitationLink" target="_blank">{{ invitationLink }}</a>
           </p>
-          <p>Der Einladungslink wurde in die Zwischenablage kopiert.</p>
+          <p>Invitelink copied to clipboard.</p>
         </div>
       </div>
     </div>
 
-    <!-- Modal: Join Kalender -->
+    <!-- Modal: Join Calendar -->
     <div v-if="isJoinModalOpen" class="modal-overlay">
       <div class="modal-content">
-        <h2>Kalender beitreten</h2>
+        <h2>Join Calendar</h2>
         <form @submit.prevent="joinCalendar">
           <div>
             <label for="joinPassphrase">Passphrase: </label>
             <input class="input" type="text" id="joinPassphrase" v-model="joinPassphrase" required />
           </div>
           <div>
-            <label for="joinUserName">Dein Name: </label>
+            <label for="joinUserName">Your Name: </label>
             <input class="input" type="text" id="joinUserName" v-model="joinUserName" required />
           </div>
           <div class="modal-buttons">
-            <button type="submit" class="btn">Beitreten</button>
-            <button type="button" class="btn btn-secondary" @click="closeJoinModal">Abbrechen</button>
+            <button type="button" class="btn btn-secondary" @click="closeJoinModal">cancel</button>
+            <button type="submit" class="btn">Join</button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Kalendercontainer -->
+    <!-- Button für vorheriges Jahr (nur sichtbar, wenn nicht im aktuellen Jahr) -->
+    <div v-if="currentDisplayYear > currentRealYear" class="year-nav-top" @click="prevYear">
+      <span class="year-nav-text">{{ currentDisplayYear - 1 }}</span>
+    </div>
+
+    <!-- Calendarcontainer -->
     <div :class="['calendar-container', userPassphrase && 'calendar-container--top']">
       <div class="calendar-header">
-        <div class="year-display">{{ currentYear }}</div>
+        <!-- Teilnehmerliste im Header links -->
+        <div v-if="userPassphrase && uniqueUsers.length" class="user-list-header">
+          <ul>
+            <li v-for="user in uniqueUsers" :key="user" @click="toggleFilterUser(user)"
+              :class="{ active: filterUser === user }">
+              {{ user }}
+            </li>
+            <li v-if="filterUser" @click="clearFilter">show all</li>
+          </ul>
+        </div>
+        <!-- Jahreszahl mittig -->
+        <div class="year-display">{{ currentDisplayYear }}</div>
+        <!-- Button zum Zurückkehren zur Startseite, rechts -->
+        <div v-if="userPassphrase" class="home-button-container">
+          <button class="home-button" @click="returnToStartPage">return</button>
+        </div>
       </div>
       <div class="months-grid">
         <div v-for="(month, mIndex) in months" :key="mIndex" class="month">
@@ -69,7 +94,7 @@
           <div class="weeks">
             <div v-for="(week, wIndex) in month.weeks" :key="wIndex" class="week">
               <div v-for="(day, dIndex) in week" :key="dIndex" class="day" :class="{ empty: !day }"
-                :style="getDayStyle(day)" @click="toggleDaySelection(day)">
+                :style="getDayStyle(day)" @click="userPassphrase ? toggleDaySelection(day) : null">
                 <span v-if="day">{{ day.getDate() }}</span>
               </div>
             </div>
@@ -80,34 +105,36 @@
 
     <!-- Button zum Absenden der Buchung -->
     <div v-if="userPassphrase && (selectedDates.length || deselectedDates.length)" class="booking-actions">
-      <button class="btn" @click="submitBooking">Buchung absenden</button>
+      <button class="btn" @click="submitBooking">Send</button>
     </div>
 
-    <!-- Teilnehmerliste -->
-    <div v-if="userPassphrase && uniqueUsers.length" class="user-list">
-      <p>Teilnehmer:</p>
-      <ul>
-        <li v-for="user in uniqueUsers" :key="user" @click="toggleFilterUser(user)"
-          :class="{ active: filterUser === user }">
-          {{ user }}
-        </li>
-        <li v-if="filterUser" @click="clearFilter">Alle anzeigen</li>
-      </ul>
+    <!-- Button für nächstes Jahr -->
+    <div class="year-nav-bottom" @click="nextYear">
+      <span class="year-nav-text">{{ currentDisplayYear + 1 }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import dayjs from 'dayjs'
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore'
 dayjs.extend(isSameOrBefore)
 
+// --------------------------
+// 0) Farbkonfiguration für Buchungen
+// --------------------------
+const bookingColorConfig = {
+  minOpacity: 0.2,  // Hellgrau für 1 Person (20% Opazität)
+  maxOpacity: 0.9,  // Fast schwarz für maximale Überschneidung (90% Opazität)
+  baseColor: 'rgb(80, 80, 80)' // Grau-Basis
+}
 
 // --------------------------
-// 1) Kalenderdaten (jährliches Raster)
+// 1) Calendardaten (jährliches Raster)
 // --------------------------
-const currentYear = dayjs().year()
+const currentRealYear = dayjs().year()
+const currentDisplayYear = ref(currentRealYear)
 const monthNames = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
@@ -115,8 +142,8 @@ const monthNames = [
 const months = computed(() => {
   const result = []
   for (let m = 0; m < 12; m++) {
-    const firstDay = new Date(currentYear, m, 1)
-    const lastDay = new Date(currentYear, m + 1, 0)
+    const firstDay = new Date(currentDisplayYear.value, m, 1)
+    const lastDay = new Date(currentDisplayYear.value, m + 1, 0)
     const cells = []
     // Anzahl leerer Felder vor dem 1. des Monats
     const emptyBefore = firstDay.getDay()
@@ -125,7 +152,7 @@ const months = computed(() => {
     }
     // Tage des Monats
     for (let d = 1; d <= lastDay.getDate(); d++) {
-      cells.push(new Date(currentYear, m, d))
+      cells.push(new Date(currentDisplayYear.value, m, d))
     }
     // Auffüllen auf ein Vielfaches von 7
     while (cells.length % 7 !== 0) {
@@ -141,7 +168,7 @@ const months = computed(() => {
 })
 
 // --------------------------
-// 2) States für Modals, aktiver Kalender, Buchungen
+// 2) States für Modals, aktiver Calendar, Buchungen
 // --------------------------
 const isCreateModalOpen = ref(false)
 const isJoinModalOpen = ref(false)
@@ -150,9 +177,13 @@ const joinPassphrase = ref('')
 const joinUserName = ref('')
 const createdPassphrase = ref('')
 const invitationLink = ref('')
-const userPassphrase = ref('') // Aktive Kalender-Passphrase
+const userPassphrase = ref('') // Aktive Calendar-Passphrase
 const currentUser = ref('')    // Aktueller Nutzername
 const bookings = ref([])       // Einträge (DB)
+const placeholderDates = ref([]) // Zufällige Tage für den Platzhalter-Calendar
+const pageTransitioning = ref(false) // Für Jahr-Animation
+const transitionDirection = ref('up') // 'up' oder 'down' für Animation
+const showCopyHint = ref(false) // Anzeige dass Passphrase kopiert wurde
 
 // Neue Auswahlen
 const selectedDates = ref([])   // Neue Buchungen
@@ -170,22 +201,37 @@ const myBookedDates = computed(() => {
   })
   return dates
 })
+
 const otherBookingCount = computed(() => {
   const counts = {}
+
+  // Zähle für jeden Tag, wie viele Personen ihn als besetzt markiert haben
   bookings.value.forEach(entry => {
     if (entry.unavailabledates) {
       entry.unavailabledates.forEach(d => {
-        if (entry.username !== currentUser.value) {
+        if (!filterUser.value || entry.username === filterUser.value || entry.username === currentUser.value) {
           counts[d] = (counts[d] || 0) + 1
         }
       })
     }
   })
+
   return counts
 })
 
+// Maximale Anzahl von Buchungen auf einem Tag (für Farbskalierung)
+const maxBookingsPerDay = computed(() => {
+  let max = 1
+  for (const day in otherBookingCount.value) {
+    if (otherBookingCount.value[day] > max) {
+      max = otherBookingCount.value[day]
+    }
+  }
+  return max
+})
+
 // --------------------------
-// 4) Modals öffnen/schließen & Kalender aktivieren
+// 4) Modals öffnen/schließen & Calendar aktivieren
 // --------------------------
 function openCreateModal() {
   isCreateModalOpen.value = true
@@ -211,7 +257,7 @@ async function createCalendar() {
     const res = await $fetch('/api/groups', {
       method: 'POST',
       body: {
-        groupName: 'Neuer Kalender',
+        groupName: 'Neuer Calendar',
         adminName: newAdminName.value,
         passphrase: generatedPassphrase
       }
@@ -227,7 +273,7 @@ async function createCalendar() {
       fetchBookings()
     }
   } catch (error) {
-    console.error("Fehler beim Erstellen des Kalenders:", error)
+    console.error("Fehler beim Erstellen des Calendars:", error)
   }
 }
 
@@ -257,7 +303,7 @@ function fetchBookings() {
 // 6) Tag-Auswahl für Zeitspanne und Freigabe
 // --------------------------
 function toggleDaySelection(day) {
-  if (!day) return
+  if (!day || !userPassphrase.value) return
   const dateStr = dayjs(day).format('YYYY-MM-DD')
 
   // a) Falls bereits neu ausgewählt -> entfernen
@@ -305,20 +351,39 @@ function getDayStyle(day) {
   if (!day) return {}
   const dateStr = dayjs(day).format('YYYY-MM-DD')
 
+  // Wenn kein aktiver Calendar, zeigen wir nur Platzhalter-Tage
+  if (!userPassphrase.value) {
+    if (placeholderDates.value.includes(dateStr)) {
+      return { background: '#ccc', border: "0.5px solid #cfcfcf" }
+    }
+    return { background: '#fff', border: "0.5px solid #cfcfcf" }
+  }
+
   // Neue Auswahl (noch nicht in DB)
   if (selectedDates.value.includes(dateStr)) {
     return { background: '#000', color: '#fff', border: "0.5px solid #000" }
   }
+
   // Eigene DB-Buchungen (grau + dicker schwarzer Rahmen), sofern nicht zur Freigabe markiert
   if (myBookedDates.value.has(dateStr) && !deselectedDates.value.includes(dateStr)) {
     return { background: '#ccc', border: "2px solid #000", color: "#000" }
   }
-  // Buchungen anderer Nutzer
+
+  // Buchungen anderer Nutzer - mit gradueller Färbung basierend auf der Anzahl der Buchungen
   const count = otherBookingCount.value[dateStr] || 0
   if (count > 0) {
-    const opacity = Math.min(0.2 + count * 0.2, 0.8)
-    return { background: `rgba(128,128,128,${opacity})`, border: "0.5px solid #cfcfcf" }
+    // Dynamische Opazität basierend auf der Anzahl der Buchungen im Verhältnis zum Maximum
+    const opacityRange = bookingColorConfig.maxOpacity - bookingColorConfig.minOpacity;
+    const normalizedCount = Math.min(count / maxBookingsPerDay.value, 1);
+    const opacity = bookingColorConfig.minOpacity + (normalizedCount * opacityRange);
+
+    return {
+      background: bookingColorConfig.baseColor.replace(')', `, ${opacity})`).replace('rgb', 'rgba'),
+      border: "0.5px solid #cfcfcf",
+      color: opacity > 0.6 ? '#fff' : '#000' // Textfarbe anpassen für bessere Lesbarkeit
+    }
   }
+
   // Standard
   return { background: '#fff', border: "0.5px solid #cfcfcf" }
 }
@@ -377,6 +442,104 @@ function toggleFilterUser(user) {
 function clearFilter() {
   filterUser.value = ''
 }
+
+// --------------------------
+// 10) Generate random placeholder dates
+// --------------------------
+function generateRandomPlaceholderDates() {
+  const dates = []
+  const totalDates = 80 // Anzahl der zufälligen Tage
+
+  for (let i = 0; i < totalDates; i++) {
+    const month = Math.floor(Math.random() * 12)
+    const maxDay = new Date(currentDisplayYear.value, month + 1, 0).getDate()
+    const day = Math.floor(Math.random() * maxDay) + 1
+    const dateStr = dayjs(new Date(currentDisplayYear.value, month, day)).format('YYYY-MM-DD')
+
+    // Vermeiden von Duplikaten
+    if (!dates.includes(dateStr)) {
+      dates.push(dateStr)
+    }
+  }
+
+  placeholderDates.value = dates
+}
+
+// --------------------------
+// 11) Jahr-Navigation
+// --------------------------
+function nextYear() {
+  transitionDirection.value = 'up';
+  pageTransitioning.value = true;
+
+  setTimeout(() => {
+    currentDisplayYear.value++;
+    generateRandomPlaceholderDates();
+
+    // Verzögerung, damit die Animation sichtbar ist
+    setTimeout(() => {
+      pageTransitioning.value = false;
+    }, 300);
+  }, 300);
+}
+
+function prevYear() {
+  transitionDirection.value = 'down';
+  pageTransitioning.value = true;
+
+  setTimeout(() => {
+    currentDisplayYear.value--;
+    generateRandomPlaceholderDates();
+
+    setTimeout(() => {
+      pageTransitioning.value = false;
+    }, 300);
+  }, 300);
+}
+
+// --------------------------
+// 12) Passphrase kopieren & zur Startseite zurückkehren
+// --------------------------
+function copyPassphraseToClipboard() {
+  navigator.clipboard.writeText(userPassphrase.value)
+    .then(() => {
+      showCopyHint.value = true;
+      setTimeout(() => {
+        showCopyHint.value = false;
+      }, 2000);
+    })
+    .catch(err => {
+      console.error("Fehler beim Kopieren:", err);
+    });
+}
+
+function returnToStartPage() {
+  userPassphrase.value = '';
+  currentUser.value = '';
+  bookings.value = [];
+  selectedDates.value = [];
+  deselectedDates.value = [];
+  filterUser.value = '';
+  currentDisplayYear.value = currentRealYear;
+  window.history.pushState({}, document.title, window.location.pathname);
+}
+
+// Beim Jahr-Wechsel neue Platzhalter-Daten generieren
+watch(currentDisplayYear, () => {
+  generateRandomPlaceholderDates();
+});
+
+onMounted(() => {
+  generateRandomPlaceholderDates();
+
+  // URL-Parameter für Passphrase prüfen
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramPassphrase = urlParams.get('passphrase');
+  if (paramPassphrase) {
+    joinPassphrase.value = paramPassphrase;
+    openJoinModal();
+  }
+})
 </script>
 
 <style scoped>
@@ -388,13 +551,14 @@ function clearFilter() {
   background: #f5f5f5;
   min-height: 100vh;
   padding: 2rem;
+  overflow-x: hidden;
 }
 
 .title {
   font-size: clamp(4rem, 19vw, 19rem);
   font-weight: bold;
   margin-bottom: 5rem;
-  color: #000;
+  color: #131313;
   text-align: justify;
   white-space: nowrap;
   line-height: 65%;
@@ -415,6 +579,46 @@ function clearFilter() {
   color: #000;
 }
 
+.passphrase-display {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding-bottom: 2rem;
+  font-size: 1rem;
+  color: #555;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.passphrase-display:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.passphrase-text {
+  font-weight: bold;
+}
+
+.user-name-display {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  color: #777;
+}
+
+.copy-hint {
+  position: absolute;
+  bottom: -25px;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+}
+
 .main-header {
   width: 100%;
   display: flex;
@@ -433,9 +637,11 @@ function clearFilter() {
   border-radius: 50px;
   background: #000;
   color: #fff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   font-size: 1rem;
   cursor: pointer;
   transition: background 0.3s ease;
+
 }
 
 .btn:hover {
@@ -456,6 +662,7 @@ function clearFilter() {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
 }
 
 .modal-content {
@@ -484,7 +691,6 @@ function clearFilter() {
 .modal-buttons {
   display: flex;
   justify-content: space-around;
-
 }
 
 .calendar-container {
@@ -495,24 +701,78 @@ function clearFilter() {
   overflow: hidden;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   margin: 4rem auto;
-  transition: margin-top 0.5s ease;
+  transition: margin-top 0.5s ease, transform 0.5s ease;
 }
 
 .calendar-container--top {
-  margin-top: 1rem;
+  margin-top: 3.5rem;
 }
 
 .calendar-header {
   display: flex;
-  justify-content: flex-end;
-  padding: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
   background: #000;
+  position: relative;
 }
 
 .year-display {
   color: #fff;
   font-size: 2rem;
   font-weight: bold;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.user-list-header {
+  color: #fff;
+  flex: 1;
+}
+
+.user-list-header ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 60%;
+}
+
+.user-list-header li {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border: 0.2px solid #fff;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  transition: background 0.3s ease;
+}
+
+.user-list-header li.active,
+.user-list-header li:hover {
+  background: #333;
+}
+
+.home-button-container {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.home-button {
+  background: rgba(255, 255, 255, 0.066);
+  color: white;
+  border: 1px solid white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.home-button:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .months-grid {
@@ -565,27 +825,41 @@ function clearFilter() {
   margin-top: 1rem;
 }
 
-.user-list {
-  margin-top: 1rem;
-}
-
-.user-list ul {
-  list-style: none;
-  padding: 0;
+/* Jahr-Navigation Styles */
+.year-nav-top,
+.year-nav-bottom {
   display: flex;
-  gap: 1rem;
-}
-
-.user-list li {
+  flex-direction: column;
+  align-items: center;
   cursor: pointer;
-  padding: 0.5rem 1rem;
-  border: 1px solid #000;
-  border-radius: 20px;
+  padding: 0.5rem 2rem;
+  margin: 0.5rem 0;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.05);
   transition: background 0.3s ease;
 }
 
-.user-list li.active,
-.user-list li:hover {
-  background: #ddd;
+.year-nav-top:hover,
+.year-nav-bottom:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.year-nav-arrow {
+  font-size: 1.2rem;
+}
+
+.year-nav-text {
+  font-size: 1rem;
+  margin: 0 0.5rem;
+}
+
+.page-transitioning-up {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+.page-transitioning-down {
+  transform: translateY(100%);
+  opacity: 0;
 }
 </style>
