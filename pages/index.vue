@@ -1,20 +1,14 @@
 <template>
   <div class="page-container">
-    <!-- Vor Calendaraktivierung: großer Titel & Header -->
-    <div v-if="!userPassphrase" class="title">DATEPLAN</div>
-    <header v-if="!userPassphrase" class="main-header">
-      <div class="header-buttons">
-        <button class="btn" @click="openCreateModal">Create Calendar</button>
-        <button class="btn" @click="openJoinModal">Join Calendar</button>
-      </div>
-    </header>
-    <!-- Wenn Calendar aktiv, kleines Logo oben links und Passphrase oben rechts -->
-    <div v-else class="logo">DATEPLAN</div>
-    <div v-if="userPassphrase" class="passphrase-display" @click="copyPassphraseToClipboard">
-      <div class="passphrase-text">Passphrase: {{ userPassphrase }}</div>
-      <div class="user-name-display">Angemeldet als: {{ currentUser }}</div>
-      <div class="copy-hint" v-if="showCopyHint">Kopiert!</div>
-    </div>
+    <!-- Header mit Navigation -->
+    <app-header :is-active="!!userPassphrase" :passphrase="userPassphrase" :username="currentUser"
+      :show-copy-hint="showCopyHint" @open-create-modal="openCreateModal" @open-join-modal="openJoinModal"
+      @copy-passphrase="copyPassphraseToClipboard">
+      <template #userList>
+        <user-list v-if="userPassphrase && uniqueUsers.length" :users="uniqueUsers" :active-filter="filterUser"
+          @user-filter-change="toggleFilterUser" @clear-filter="clearFilter" />
+      </template>
+    </app-header>
 
     <!-- Modal: Create Calendar -->
     <div v-if="isCreateModalOpen" class="modal-overlay">
@@ -63,31 +57,37 @@
       </div>
     </div>
 
-    <!-- Button für vorheriges Jahr (nur sichtbar, wenn nicht im aktuellen Jahr) -->
-    <div v-if="currentDisplayYear > currentRealYear" class="year-nav-top" @click="prevYear">
-      <span class="year-nav-text">{{ currentDisplayYear - 1 }}</span>
-    </div>
+    <!-- Suggest Destination Modal -->
+    <suggest-destination-modal :is-open="isSuggestDestinationModalOpen" @close="closeSuggestDestinationModal"
+      @suggest="addDestinationSuggestion" />
 
     <!-- Calendarcontainer -->
     <div :class="['calendar-container', userPassphrase && 'calendar-container--top']">
-      <div class="calendar-header">
-        <!-- Teilnehmerliste im Header links -->
-        <div v-if="userPassphrase && uniqueUsers.length" class="user-list-header">
-          <ul>
-            <li v-for="user in uniqueUsers" :key="user" @click="toggleFilterUser(user)"
-              :class="{ active: filterUser === user }">
-              {{ user }}
-            </li>
-            <li v-if="filterUser" @click="clearFilter">show all</li>
-          </ul>
+      <!-- Calendar Header mit Year Navigation -->
+      <div v-if="userPassphrase" class="calendar-header">
+        <!-- User list -->
+        <div class="user-list-header">
+          <user-list v-if="uniqueUsers.length" :users="uniqueUsers" :active-filter="filterUser"
+            @user-filter-change="toggleFilterUser" @clear-filter="clearFilter" />
         </div>
-        <!-- Jahreszahl mittig -->
-        <div class="year-display">{{ currentDisplayYear }}</div>
-        <!-- Button zum Zurückkehren zur Startseite, rechts -->
-        <div v-if="userPassphrase" class="home-button-container">
+
+        <!-- Year display with nav buttons -->
+        <div class="year-display">
+          <div v-if="currentDisplayYear > currentRealYear" class="year-nav-button prev-year" @click="prevYear">
+            {{ currentDisplayYear - 1 }}
+          </div>
+          <div class="current-year">{{ currentDisplayYear }}</div>
+          <div class="year-nav-button next-year" @click="nextYear">
+            {{ currentDisplayYear + 1 }}
+          </div>
+        </div>
+
+        <!-- Home button -->
+        <div class="home-button-container">
           <button class="home-button" @click="returnToStartPage">return</button>
         </div>
       </div>
+
       <div class="months-grid">
         <div v-for="(month, mIndex) in months" :key="mIndex" class="month">
           <div class="month-title">{{ monthNames[mIndex] }}</div>
@@ -103,23 +103,30 @@
       </div>
     </div>
 
-    <!-- Button zum Absenden der Buchung -->
-    <div v-if="userPassphrase && (selectedDates.length || deselectedDates.length)" class="booking-actions">
-      <button class="btn" @click="submitBooking">Send</button>
+    <!-- Button zum Absenden der Buchung und andere Aktionen -->
+    <div v-if="userPassphrase" class="action-buttons">
+      <button v-if="selectedDates.length || deselectedDates.length" class="btn" @click="submitBooking">enter</button>
+      <button class="btn" @click="openSuggestDestinationModal">Suggest Destination</button>
+      <button class="btn" @click="toggleShowDestinations">
+        {{ showDestinations ? 'Hide Destinations' : 'Show Destinations' }}
+      </button>
     </div>
 
-    <!-- Button für nächstes Jahr -->
-    <div class="year-nav-bottom" @click="nextYear">
-      <span class="year-nav-text">{{ currentDisplayYear + 1 }}</span>
-    </div>
+    <!-- Destination Vorschläge -->
+    <destination-suggestions v-if="userPassphrase && showDestinations" :destinations="destinationSuggestions" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import dayjs from 'dayjs'
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore'
-dayjs.extend(isSameOrBefore)
+import { ref, computed, onMounted, watch } from 'vue';
+import dayjs from 'dayjs';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import AppHeader from '../components/AppHeader.vue';
+import UserList from '../components/UserList.vue';
+import SuggestDestinationModal from '../components/Modals/SuggestDestinationModal.vue';
+import DestinationSuggestions from '../components/DestinationSuggestions.vue';
+
+dayjs.extend(isSameOrBefore);
 
 // --------------------------
 // 0) Farbkonfiguration für Buchungen
@@ -172,6 +179,7 @@ const months = computed(() => {
 // --------------------------
 const isCreateModalOpen = ref(false)
 const isJoinModalOpen = ref(false)
+const isSuggestDestinationModalOpen = ref(false)
 const newAdminName = ref('')
 const joinPassphrase = ref('')
 const joinUserName = ref('')
@@ -181,13 +189,15 @@ const userPassphrase = ref('') // Aktive Calendar-Passphrase
 const currentUser = ref('')    // Aktueller Nutzername
 const bookings = ref([])       // Einträge (DB)
 const placeholderDates = ref([]) // Zufällige Tage für den Platzhalter-Calendar
-const pageTransitioning = ref(false) // Für Jahr-Animation
-const transitionDirection = ref('up') // 'up' oder 'down' für Animation
 const showCopyHint = ref(false) // Anzeige dass Passphrase kopiert wurde
 
 // Neue Auswahlen
 const selectedDates = ref([])   // Neue Buchungen
 const deselectedDates = ref([]) // Markierte "zu löschende" DB-Buchungen
+
+// Destination Suggestions
+const destinationSuggestions = ref([])
+const showDestinations = ref(false)
 
 // --------------------------
 // 3) Computed: Eigene Buchungen & andere Buchungen
@@ -251,6 +261,14 @@ function closeJoinModal() {
   isJoinModalOpen.value = false
 }
 
+function openSuggestDestinationModal() {
+  isSuggestDestinationModalOpen.value = true
+}
+
+function closeSuggestDestinationModal() {
+  isSuggestDestinationModalOpen.value = false
+}
+
 async function createCalendar() {
   const generatedPassphrase = Math.random().toString(36).substring(2, 10)
   try {
@@ -282,7 +300,8 @@ async function joinCalendar() {
     userPassphrase.value = joinPassphrase.value
     currentUser.value = joinUserName.value
     isJoinModalOpen.value = false
-    fetchBookings()
+    await fetchBookings()
+    await fetchDestinationSuggestions() // Lade vorhandene Zielvorschläge
   }
 }
 
@@ -329,8 +348,9 @@ function toggleDaySelection(day) {
   } else if (selectedDates.value.length === 1) {
     // 2. Klick -> Zeitspanne
     let start = dayjs(selectedDates.value[0])
-    let end = dayjs(day)
+    let end = dayjs(dateStr)
     if (end.isBefore(start)) [start, end] = [end, start]
+
     const range = []
     let cur = start
     while (cur.isSameOrBefore(end)) {
@@ -469,32 +489,15 @@ function generateRandomPlaceholderDates() {
 // 11) Jahr-Navigation
 // --------------------------
 function nextYear() {
-  transitionDirection.value = 'up';
-  pageTransitioning.value = true;
-
-  setTimeout(() => {
-    currentDisplayYear.value++;
-    generateRandomPlaceholderDates();
-
-    // Verzögerung, damit die Animation sichtbar ist
-    setTimeout(() => {
-      pageTransitioning.value = false;
-    }, 300);
-  }, 300);
+  currentDisplayYear.value++;
+  generateRandomPlaceholderDates();
 }
 
 function prevYear() {
-  transitionDirection.value = 'down';
-  pageTransitioning.value = true;
-
-  setTimeout(() => {
+  if (currentDisplayYear.value > currentRealYear) {
     currentDisplayYear.value--;
     generateRandomPlaceholderDates();
-
-    setTimeout(() => {
-      pageTransitioning.value = false;
-    }, 300);
-  }, 300);
+  }
 }
 
 // --------------------------
@@ -521,7 +524,53 @@ function returnToStartPage() {
   deselectedDates.value = [];
   filterUser.value = '';
   currentDisplayYear.value = currentRealYear;
+  destinationSuggestions.value = [];
   window.history.pushState({}, document.title, window.location.pathname);
+}
+
+// --------------------------
+// 13) Destination Suggestions
+// --------------------------
+async function addDestinationSuggestion(newDestination) {
+  try {
+    const response = await $fetch('/api/destinations', {
+      method: 'POST',
+      body: {
+        groupPassphrase: userPassphrase.value,
+        author: currentUser.value,
+        destination: newDestination
+      }
+    });
+
+    if (response.message) {
+      await fetchDestinationSuggestions();
+      showDestinations.value = true;
+    }
+  } catch (error) {
+    console.error("Fehler beim Speichern des Zielvorschlags:", error);
+  }
+
+  closeSuggestDestinationModal();
+}
+
+async function fetchDestinationSuggestions() {
+  if (!userPassphrase.value) return;
+
+  try {
+    const response = await $fetch(`/api/destinations/${userPassphrase.value}`);
+    if (response.destinations) {
+      destinationSuggestions.value = response.destinations;
+    }
+  } catch (error) {
+    console.error("Fehler beim Abrufen der Zielvorschläge:", error);
+  }
+}
+
+function toggleShowDestinations() {
+  showDestinations.value = !showDestinations.value;
+  if (showDestinations.value && destinationSuggestions.value.length === 0) {
+    fetchDestinationSuggestions();
+  }
 }
 
 // Beim Jahr-Wechsel neue Platzhalter-Daten generieren
@@ -552,6 +601,25 @@ onMounted(() => {
   min-height: 100vh;
   padding: 2rem;
   overflow-x: hidden;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .title {
@@ -637,7 +705,7 @@ onMounted(() => {
   border-radius: 50px;
   background: #000;
   color: #fff;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 7px 10px rgba(0, 0, 0, 0.119);
   font-size: 1rem;
   cursor: pointer;
   transition: background 0.3s ease;
@@ -719,11 +787,43 @@ onMounted(() => {
 
 .year-display {
   color: #fff;
-  font-size: 2rem;
-  font-weight: bold;
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.current-year {
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+.year-nav-button {
+  color: #aaa;
+  /* grau */
+  font-size: calc(2rem - 1rem);
+  /* 1rem kleiner als das aktuelle Jahr */
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.year-nav-button:hover {
+  color: #fff;
+}
+
+.user-list-header {
+  color: #fff;
+  flex: 1;
+}
+
+.user-list-header ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  color: #fff;
 }
 
 .user-list-header {
@@ -831,7 +931,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
+  width: 2rem;
   padding: 0.5rem 2rem;
   margin: 0.5rem 0;
   border-radius: 1rem;
