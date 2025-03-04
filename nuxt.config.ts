@@ -2,16 +2,22 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ["@nuxt/image-edge"],
   compatibilityDate: "2025-03-04",
+  
+  // Die nitro-Konfiguration zum Routing hinzufügen
+  nitro: {
+    routeRules: {
+      '/': { prerender: true }
+    }
+  },
+  
   runtimeConfig: {
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_KEY,
-   
-    public: {
-      // Entfernen der statischen baseURL oder dynamisch basierend auf Umgebung setzen
-      // baseURL wird nun automatisch vom Server abgeleitet
-    }
+    public: {}
   },
+  
   app: {
+    baseURL: '/', 
     head: {
       title: 'Dateplan',
       meta: [
@@ -20,7 +26,6 @@ export default defineNuxtConfig({
       ]
     }
   },
-  css: [
-    '~/assets/fonts.css'
-  ]
+  
+  css: ['~/assets/fonts.css']
 });
