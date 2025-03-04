@@ -1,4 +1,5 @@
 <template>
+  <html lang="eng">
   <div class="page-container">
     <!-- Title nur auf Startseite anzeigen -->
     <div v-if="!userPassphrase" class="landing-page">
@@ -141,6 +142,8 @@
     <polls-list v-if="userPassphrase" :polls="polls" :current-user="currentUser" @vote="submitPollVote"
       @delete-poll="deletePoll" />
   </div>
+
+  </html>
 </template>
 
 <script setup>
@@ -833,17 +836,15 @@ onMounted(() => {
 }
 
 .title {
-  width: 100vw;
-  font-size: clamp(4rem, 19vw, 19rem);
+  font-size: clamp(16rem, 17vw, 16rem);
   font-weight: bold;
   margin-bottom: 5rem;
-  margin-left: -2rem;
-  margin-right: -2rem;
+  margin-left: 2rem;
+  margin-right: 2rem;
   padding: 0 2rem;
   color: #131313;
   white-space: nowrap;
-  line-height: 60%;
-  text-align: justify;
+  line-height: 70%;
   letter-spacing: -0.02em;
 }
 

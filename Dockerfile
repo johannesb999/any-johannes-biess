@@ -21,6 +21,9 @@ RUN npm run build
 
 # Debug: List built files to verify output
 RUN ls -la .output/server/
+RUN ls -la .output/public/ || echo "No public directory"
+RUN ls -la pages/ || echo "No pages directory found"
+RUN find .output -type f -name "index.*" | sort
 
 # Create non-root user and fix permissions
 RUN adduser -D nuxtuser && chown -R nuxtuser:nuxtuser /usr/src/nuxt-app

@@ -1,6 +1,6 @@
 <template>
     <div class="app-header">
-        <div class="logo">ANY</div>
+        <div class="logo">DATEPLAN</div>
 
         <!-- User List wurde entfernt -->
 

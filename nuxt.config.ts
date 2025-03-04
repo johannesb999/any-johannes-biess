@@ -1,4 +1,3 @@
-// filepath: /C:/Users/biess/Documents/Development/any-johannes-biess/nuxt.config.ts
 export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ["@nuxt/image-edge"],
@@ -11,7 +10,11 @@ export default defineNuxtConfig({
       baseURL: 'http://localhost:3000'
     }
   },
-  // CSS-Einträge hier hinzufügen, wenn nötig
+  app: {
+    head: {
+      // Grundlegende Meta-Tags
+    }
+  },
   css: [
     '~/assets/fonts.css'
   ]
