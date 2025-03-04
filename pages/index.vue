@@ -1,5 +1,5 @@
 <template>
-  <html lang="eng">
+  <!-- Entfernen Sie das html-Tag und behalten Sie nur den Inhalt -->
   <div class="page-container">
     <!-- Title nur auf Startseite anzeigen -->
     <div v-if="!userPassphrase" class="landing-page">
@@ -142,8 +142,6 @@
     <polls-list v-if="userPassphrase" :polls="polls" :current-user="currentUser" @vote="submitPollVote"
       @delete-poll="deletePoll" />
   </div>
-
-  </html>
 </template>
 
 <script setup>
@@ -161,6 +159,8 @@ import PollsList from '../components/PollsList.vue';
 
 dayjs.extend(isSameOrBefore);
 
+// --------------------------
+// 0) Farbkonfiguration für Buchungen
 // --------------------------
 // 0) Farbkonfiguration für Buchungen
 // --------------------------

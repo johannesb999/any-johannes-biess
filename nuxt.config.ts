@@ -7,12 +7,17 @@ export default defineNuxtConfig({
     supabaseKey: process.env.SUPABASE_KEY,
    
     public: {
-      baseURL: 'http://localhost:3000'
+      // Entfernen der statischen baseURL oder dynamisch basierend auf Umgebung setzen
+      // baseURL wird nun automatisch vom Server abgeleitet
     }
   },
   app: {
     head: {
-      // Grundlegende Meta-Tags
+      title: 'Dateplan',
+      meta: [
+        { charset: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+      ]
     }
   },
   css: [
