@@ -1,11 +1,11 @@
 <template>
-    <div class="user-list-header">
+    <div class="user-list">
         <ul>
             <li v-for="user in users" :key="user" @click="$emit('userFilterChange', user)"
                 :class="{ active: activeFilter === user }">
                 {{ user }}
             </li>
-            <li v-if="activeFilter" @click="$emit('clearFilter')">show all</li>
+            <li v-if="activeFilter" @click="$emit('clearFilter')" class="show-all">Alle anzeigen</li>
         </ul>
     </div>
 </template>
@@ -26,32 +26,48 @@ defineEmits(['userFilterChange', 'clearFilter']);
 </script>
 
 <style scoped>
-.user-list-header {
+.user-list {
     color: #fff;
-    flex: 1;
+    max-width: 70%;
+    width: 60%;
 }
 
-.user-list-header ul {
+.user-list ul {
     list-style: none;
     padding: 0;
     margin: 0;
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-    width: 60%;
+
 }
 
-.user-list-header li {
+.user-list li {
     cursor: pointer;
     padding: 0.25rem 0.5rem;
-    border: 0.2px solid #fff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
     border-radius: 1rem;
     font-size: 0.8rem;
-    transition: background 0.3s ease;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.user-list-header li.active,
-.user-list-header li:hover {
-    background: #333;
+.user-list li:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.user-list li.active {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+    font-weight: bold;
+}
+
+.user-list li.show-all {
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.2);
+
 }
 </style>

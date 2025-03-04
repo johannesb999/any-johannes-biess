@@ -1,34 +1,19 @@
 <template>
-    <div>
-        <!-- Before Calendar Activation: Big Title & Header -->
-        <div v-if="!isActive" class="title">DATEPLAN</div>
-        <header v-if="!isActive" class="main-header">
-            <div class="header-buttons">
-                <button class="btn" @click="$emit('openCreateModal')">Create Calendar</button>
-                <button class="btn" @click="$emit('openJoinModal')">Join Calendar</button>
-            </div>
-        </header>
+    <div class="app-header">
+        <div class="logo">ANY</div>
 
-        <!-- When Calendar Active: Small Logo & Passphrase -->
-        <div v-if="isActive" class="logo">DATEPLAN</div>
-        <div v-if="isActive" class="passphrase-display" @click="$emit('copyPassphrase')">
-            <div class="passphrase-text">Passphrase: {{ passphrase }}</div>
-            <div class="user-name-display">Angemeldet als: {{ username }}</div>
-            <div class="copy-hint" v-if="showCopyHint">Kopiert!</div>
+        <!-- User List wurde entfernt -->
+
+        <div class="passphrase-display" @click="$emit('copyPassphrase')">
+            <div class="passphrase-text">{{ passphrase }}</div>
+            <div class="user-name-display">{{ username }}</div>
+            <div v-if="showCopyHint" class="copy-hint">Passphrase copied!</div>
         </div>
     </div>
 </template>
 
 <script setup>
 defineProps({
-    isActive: {
-        type: Boolean,
-        default: false
-    },
-    isCalendarHeader: {
-        type: Boolean,
-        default: false
-    },
     passphrase: {
         type: String,
         default: ''
@@ -43,30 +28,21 @@ defineProps({
     }
 });
 
-defineEmits(['openCreateModal', 'openJoinModal', 'copyPassphrase']);
+defineEmits(['copyPassphrase']);
 </script>
 
 <style scoped>
-.title {
-    font-size: clamp(4rem, 19vw, 19rem);
-    font-weight: bold;
-    margin-bottom: 5rem;
-    color: #131313;
-    text-align: justify;
-    white-space: nowrap;
-    line-height: 65%;
-}
-
-.title::after {
-    content: "";
-    display: inline-block;
+.app-header {
     width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 2rem;
+    padding: 1rem;
 }
 
 .logo {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
     font-size: 2rem;
     font-weight: bold;
     color: #000;
@@ -110,33 +86,5 @@ defineEmits(['openCreateModal', 'openJoinModal', 'copyPassphrase']);
     padding: 3px 8px;
     border-radius: 10px;
     font-size: 0.8rem;
-}
-
-.main-header {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    margin-bottom: 2rem;
-}
-
-.header-buttons {
-    display: flex;
-    gap: 1rem;
-}
-
-.btn {
-    padding: 1rem 2rem;
-    border: none;
-    border-radius: 50px;
-    background: #000;
-    color: #fff;
-    box-shadow: 0 7px 10px rgba(0, 0, 0, 0.119);
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background 0.3s ease;
-}
-
-.btn:hover {
-    background: #333;
 }
 </style>

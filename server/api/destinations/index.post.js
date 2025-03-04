@@ -3,44 +3,38 @@ import { readBody } from 'h3';
 
 export default defineEventHandler(async (event) => {
     const body = await readBody(event);
-    const { groupPassphrase, author, destination } = body;
+    const { grouppassphrase, author, name, type, duration, budget, notes } = body;
 
-    if (!groupPassphrase || !author || !destination || !destination.name) {
-        return { statusCode: 400, error: 'Gruppenkennwort, Autor und Zielinformationen sind erforderlich' };
+    if (!grouppassphrase || !author || !name || !type || duration === undefined || !budget) {
+        return { statusCode: 400, message: "Ungültige Anfrage - fehlende Pflichtfelder" };
     }
 
+    // Stelle sicher, dass duration eine Zahl ist
+    const durationNumber = parseInt(duration, 10);
+
     try {
-        // Überprüfe, ob die Gruppe existiert
-        const { data: group, error: groupError } = await supabase
-            .from('groups')
-            .select('*')
-            .eq('passphrase', groupPassphrase)
-            .single();
-
-        if (groupError || !group) {
-            return { statusCode: 404, error: 'Gruppe nicht gefunden.' };
-        }
-
         const { data, error } = await supabase
             .from('destinations')
             .insert([{
-                grouppassphrase: groupPassphrase,
-                author: author,
-                name: destination.name,
-                type: destination.type,
-                duration: destination.duration,
-                budget: destination.budget,
-                notes: destination.notes,
+                grouppassphrase,
+                author,
+                name,
+                type,
+                duration: isNaN(durationNumber) ? 7 : durationNumber, // Fallback auf 7 Tage
+                budget,
+                notes: notes || '',
                 createdat: new Date().toISOString()
-            }]);
+            }])
+            .select();
 
         if (error) {
-            console.error("Error inserting destination:", error);
+            console.error("Error creating destination:", error);
             return { statusCode: 500, error: error.message };
         }
-        return { message: 'Ziel vorgeschlagen', destination: data };
+
+        return { message: "Destination erfolgreich erstellt", destination: data[0] };
     } catch (err) {
-        console.error("Error in destinations.post.js:", err);
+        console.error("Error in destinations/index.post.js:", err);
         return { statusCode: 500, error: err.message };
     }
 });

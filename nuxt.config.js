@@ -1,0 +1,9 @@
+// ...existing code...
+export default {
+    // ...existing code...
+    css: [
+        // ...andere CSS Dateien
+        '~/assets/css/fonts.css'
+    ],
+    // ...existing code...
+}

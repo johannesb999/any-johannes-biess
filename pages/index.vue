@@ -1,13 +1,18 @@
 <template>
   <div class="page-container">
-    <!-- Header mit Navigation -->
-    <app-header :is-active="!!userPassphrase" :passphrase="userPassphrase" :username="currentUser"
-      :show-copy-hint="showCopyHint" @open-create-modal="openCreateModal" @open-join-modal="openJoinModal"
-      @copy-passphrase="copyPassphraseToClipboard">
-      <template #userList>
-        <user-list v-if="userPassphrase && uniqueUsers.length" :users="uniqueUsers" :active-filter="filterUser"
-          @user-filter-change="toggleFilterUser" @clear-filter="clearFilter" />
-      </template>
+    <!-- Title nur auf Startseite anzeigen -->
+    <div v-if="!userPassphrase" class="landing-page">
+      <div class="title">DATEPLAN</div>
+      <div class="header-buttons">
+        <button class="btn" @click="openCreateModal">Create Calendar</button>
+        <button class="btn" @click="openJoinModal">Join Calendar</button>
+      </div>
+    </div>
+
+    <!-- Header nur anzeigen, wenn Calendar aktiv -->
+    <app-header v-if="!!userPassphrase" :passphrase="userPassphrase" :username="currentUser"
+      :show-copy-hint="showCopyHint" @copy-passphrase="copyPassphraseToClipboard">
+      <!-- UserList aus dem Header entfernt -->
     </app-header>
 
     <!-- Modal: Create Calendar -->
@@ -61,12 +66,16 @@
     <suggest-destination-modal :is-open="isSuggestDestinationModalOpen" @close="closeSuggestDestinationModal"
       @suggest="addDestinationSuggestion" />
 
+    <!-- Create Poll Modal -->
+    <create-poll-modal :is-open="isCreatePollModalOpen" :selected-destinations="selectedDestinations"
+      @close="closeCreatePollModal" @create-poll="createPoll" />
+
     <!-- Calendarcontainer -->
     <div :class="['calendar-container', userPassphrase && 'calendar-container--top']">
-      <!-- Calendar Header mit Year Navigation -->
+      <!-- Calendar Header mit Year Navigation und User-Filter -->
       <div v-if="userPassphrase" class="calendar-header">
-        <!-- User list -->
-        <div class="user-list-header">
+        <!-- UserList links im Kalender-Header -->
+        <div class="user-filter-container">
           <user-list v-if="uniqueUsers.length" :users="uniqueUsers" :active-filter="filterUser"
             @user-filter-change="toggleFilterUser" @clear-filter="clearFilter" />
         </div>
@@ -93,27 +102,44 @@
           <div class="month-title">{{ monthNames[mIndex] }}</div>
           <div class="weeks">
             <div v-for="(week, wIndex) in month.weeks" :key="wIndex" class="week">
-              <div v-for="(day, dIndex) in week" :key="dIndex" class="day" :class="{ empty: !day }"
-                :style="getDayStyle(day)" @click="userPassphrase ? toggleDaySelection(day) : null">
+              <div v-for="(day, dIndex) in week" :key="dIndex" class="day" :class="{
+                empty: !day,
+                'highlighted-day': isHighlightedDay(day)
+              }" :style="getDayStyle(day)" @click="userPassphrase ? toggleDaySelection(day) : null">
                 <span v-if="day">{{ day.getDate() }}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Enter Button im Kalendercontainer -->
+      <div v-if="userPassphrase" class="enter-button-container">
+        <button class="btn" :disabled="!hasChanges" :class="{ 'btn-disabled': !hasChanges }" @click="submitBooking">
+          Enter
+        </button>
+      </div>
     </div>
 
-    <!-- Button zum Absenden der Buchung und andere Aktionen -->
+    <!-- Button zum Vorschlagen neuer Ziele -->
     <div v-if="userPassphrase" class="action-buttons">
-      <button v-if="selectedDates.length || deselectedDates.length" class="btn" @click="submitBooking">enter</button>
       <button class="btn" @click="openSuggestDestinationModal">Suggest Destination</button>
-      <button class="btn" @click="toggleShowDestinations">
-        {{ showDestinations ? 'Hide Destinations' : 'Show Destinations' }}
-      </button>
     </div>
 
     <!-- Destination Vorschläge -->
-    <destination-suggestions v-if="userPassphrase && showDestinations" :destinations="destinationSuggestions" />
+    <destination-suggestions v-if="userPassphrase && destinationSuggestions.length > 0"
+      :destinations="destinationSuggestions" :selectable="true" :bookings="bookings" :uniqueUsers="uniqueUsers"
+      :currentUser="currentUser" @selection-change="handleDestinationSelection" @delete="deleteDestination"
+      @highlight-dates="handleHighlightDates" />
+
+    <!-- Poll Create Button -->
+    <div v-if="selectedDestinations.length > 0" class="create-poll-button-container">
+      <button class="btn btn-primary" @click="openCreatePollModal">Create Poll</button>
+    </div>
+
+    <!-- Polls List -->
+    <polls-list v-if="userPassphrase" :polls="polls" :current-user="currentUser" @vote="submitPollVote"
+      @delete-poll="deletePoll" />
   </div>
 </template>
 
@@ -121,10 +147,14 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import dayjs from 'dayjs';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import { useCalendarData } from '../composables/useCalendarData';
+import { useBookings } from '../composables/useBookings';
 import AppHeader from '../components/AppHeader.vue';
 import UserList from '../components/UserList.vue';
 import SuggestDestinationModal from '../components/Modals/SuggestDestinationModal.vue';
 import DestinationSuggestions from '../components/DestinationSuggestions.vue';
+import CreatePollModal from '../components/Modals/CreatePollModal.vue';
+import PollsList from '../components/PollsList.vue';
 
 dayjs.extend(isSameOrBefore);
 
@@ -135,142 +165,98 @@ const bookingColorConfig = {
   minOpacity: 0.2,  // Hellgrau für 1 Person (20% Opazität)
   maxOpacity: 0.9,  // Fast schwarz für maximale Überschneidung (90% Opazität)
   baseColor: 'rgb(80, 80, 80)' // Grau-Basis
-}
+};
 
 // --------------------------
 // 1) Calendardaten (jährliches Raster)
 // --------------------------
-const currentRealYear = dayjs().year()
-const currentDisplayYear = ref(currentRealYear)
-const monthNames = [
-  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
-]
-const months = computed(() => {
-  const result = []
-  for (let m = 0; m < 12; m++) {
-    const firstDay = new Date(currentDisplayYear.value, m, 1)
-    const lastDay = new Date(currentDisplayYear.value, m + 1, 0)
-    const cells = []
-    // Anzahl leerer Felder vor dem 1. des Monats
-    const emptyBefore = firstDay.getDay()
-    for (let i = 0; i < emptyBefore; i++) {
-      cells.push(null)
-    }
-    // Tage des Monats
-    for (let d = 1; d <= lastDay.getDate(); d++) {
-      cells.push(new Date(currentDisplayYear.value, m, d))
-    }
-    // Auffüllen auf ein Vielfaches von 7
-    while (cells.length % 7 !== 0) {
-      cells.push(null)
-    }
-    const weeks = []
-    for (let i = 0; i < cells.length; i += 7) {
-      weeks.push(cells.slice(i, i + 7))
-    }
-    result.push({ weeks })
-  }
-  return result
-})
+const {
+  currentRealYear,
+  currentDisplayYear,
+  monthNames,
+  months,
+  nextYear,
+  prevYear
+} = useCalendarData();
 
 // --------------------------
 // 2) States für Modals, aktiver Calendar, Buchungen
 // --------------------------
-const isCreateModalOpen = ref(false)
-const isJoinModalOpen = ref(false)
-const isSuggestDestinationModalOpen = ref(false)
-const newAdminName = ref('')
-const joinPassphrase = ref('')
-const joinUserName = ref('')
-const createdPassphrase = ref('')
-const invitationLink = ref('')
-const userPassphrase = ref('') // Aktive Calendar-Passphrase
-const currentUser = ref('')    // Aktueller Nutzername
-const bookings = ref([])       // Einträge (DB)
-const placeholderDates = ref([]) // Zufällige Tage für den Platzhalter-Calendar
-const showCopyHint = ref(false) // Anzeige dass Passphrase kopiert wurde
+const isCreateModalOpen = ref(false);
+const isJoinModalOpen = ref(false);
+const isSuggestDestinationModalOpen = ref(false);
+const isCreatePollModalOpen = ref(false);
+const newAdminName = ref('');
+const joinPassphrase = ref('');
+const joinUserName = ref('');
+const createdPassphrase = ref('');
+const invitationLink = ref('');
+const userPassphrase = ref(''); // Aktive Calendar-Passphrase
+const currentUser = ref('');    // Aktueller Nutzername
+const showCopyHint = ref(false); // Anzeige dass Passphrase kopiert wurde
+const filterUser = ref(''); // Filter für Benutzer
 
-// Neue Auswahlen
-const selectedDates = ref([])   // Neue Buchungen
-const deselectedDates = ref([]) // Markierte "zu löschende" DB-Buchungen
+// Buchungen
+const {
+  bookings,
+  filteredBookings,
+  placeholderDates,
+  selectedDates,
+  deselectedDates,
+  myBookedDates,
+  otherBookingCount,
+  maxBookingsPerDay,
+  hasChanges,
+  fetchBookings,
+  toggleDaySelection,
+  getDayStyle,
+  submitBooking,
+  generateRandomPlaceholderDates
+} = useBookings(userPassphrase, currentUser, currentDisplayYear, filterUser);
 
 // Destination Suggestions
-const destinationSuggestions = ref([])
-const showDestinations = ref(false)
+const destinationSuggestions = ref([]);
+const selectedDestinations = ref([]);
+const polls = ref([]);
+
+// Neuer State für hervorgehobene Daten
+const highlightedDates = ref([]);
+let highlightTimeout = null;
 
 // --------------------------
-// 3) Computed: Eigene Buchungen & andere Buchungen
-// --------------------------
-const myBookedDates = computed(() => {
-  const dates = new Set()
-  bookings.value.forEach(entry => {
-    if (entry.username === currentUser.value && entry.unavailabledates) {
-      entry.unavailabledates.forEach(d => dates.add(d))
-    }
-  })
-  return dates
-})
-
-const otherBookingCount = computed(() => {
-  const counts = {}
-
-  // Zähle für jeden Tag, wie viele Personen ihn als besetzt markiert haben
-  bookings.value.forEach(entry => {
-    if (entry.unavailabledates) {
-      entry.unavailabledates.forEach(d => {
-        if (!filterUser.value || entry.username === filterUser.value || entry.username === currentUser.value) {
-          counts[d] = (counts[d] || 0) + 1
-        }
-      })
-    }
-  })
-
-  return counts
-})
-
-// Maximale Anzahl von Buchungen auf einem Tag (für Farbskalierung)
-const maxBookingsPerDay = computed(() => {
-  let max = 1
-  for (const day in otherBookingCount.value) {
-    if (otherBookingCount.value[day] > max) {
-      max = otherBookingCount.value[day]
-    }
-  }
-  return max
-})
-
-// --------------------------
-// 4) Modals öffnen/schließen & Calendar aktivieren
+// 3) Modals öffnen/schließen & Calendar aktivieren
 // --------------------------
 function openCreateModal() {
-  isCreateModalOpen.value = true
-  newAdminName.value = ''
-  createdPassphrase.value = ''
-  invitationLink.value = ''
+  isCreateModalOpen.value = true;
+  newAdminName.value = '';
+  createdPassphrase.value = '';
+  invitationLink.value = '';
 }
+
 function closeCreateModal() {
-  isCreateModalOpen.value = false
+  isCreateModalOpen.value = false;
 }
+
 function openJoinModal() {
-  isJoinModalOpen.value = true
-  joinPassphrase.value = ''
-  joinUserName.value = ''
+  isJoinModalOpen.value = true;
+  joinPassphrase.value = '';
+  joinUserName.value = '';
 }
+
 function closeJoinModal() {
-  isJoinModalOpen.value = false
+  isJoinModalOpen.value = false;
 }
 
 function openSuggestDestinationModal() {
-  isSuggestDestinationModalOpen.value = true
+  isSuggestDestinationModalOpen.value = true;
 }
 
 function closeSuggestDestinationModal() {
-  isSuggestDestinationModalOpen.value = false
+  isSuggestDestinationModalOpen.value = false;
 }
 
 async function createCalendar() {
-  const generatedPassphrase = Math.random().toString(36).substring(2, 10)
+  const generatedPassphrase = Math.random().toString(36).substring(2, 10);
   try {
     const res = await $fetch('/api/groups', {
       method: 'POST',
@@ -279,229 +265,54 @@ async function createCalendar() {
         adminName: newAdminName.value,
         passphrase: generatedPassphrase
       }
-    })
+    });
+
     if (res.message) {
-      createdPassphrase.value = generatedPassphrase
-      invitationLink.value = window.location.origin + '/?passphrase=' + generatedPassphrase
-      await navigator.clipboard.writeText(invitationLink.value)
-      userPassphrase.value = generatedPassphrase
-      currentUser.value = newAdminName.value
-      isCreateModalOpen.value = false
-      isJoinModalOpen.value = false
-      fetchBookings()
+      createdPassphrase.value = generatedPassphrase;
+      invitationLink.value = window.location.origin + '/?passphrase=' + generatedPassphrase;
+      await navigator.clipboard.writeText(invitationLink.value);
+      userPassphrase.value = generatedPassphrase;
+      currentUser.value = newAdminName.value;
+      isCreateModalOpen.value = false;
+      isJoinModalOpen.value = false;
+      fetchBookings();
     }
   } catch (error) {
-    console.error("Fehler beim Erstellen des Calendars:", error)
+    console.error("Fehler beim Erstellen des Calendars:", error);
   }
 }
 
 async function joinCalendar() {
   if (joinPassphrase.value && joinUserName.value) {
-    userPassphrase.value = joinPassphrase.value
-    currentUser.value = joinUserName.value
-    isJoinModalOpen.value = false
-    await fetchBookings()
-    await fetchDestinationSuggestions() // Lade vorhandene Zielvorschläge
+    userPassphrase.value = joinPassphrase.value;
+    currentUser.value = joinUserName.value;
+    isJoinModalOpen.value = false;
+    await fetchBookings();
+    await fetchDestinationSuggestions(); // Lade vorhandene Zielvorschläge
   }
 }
 
 // --------------------------
-// 5) Buchungen abrufen (API-Endpunkt GET /api/entries/[passphrase])
-// --------------------------
-function fetchBookings() {
-  if (!userPassphrase.value) {
-    bookings.value = []
-    return
-  }
-  $fetch(`/api/entries/${userPassphrase.value}`)
-    .then(res => { bookings.value = res.entries || [] })
-    .catch(err => { console.error("Error fetching bookings:", err); bookings.value = [] })
-}
-
-// --------------------------
-// 6) Tag-Auswahl für Zeitspanne und Freigabe
-// --------------------------
-function toggleDaySelection(day) {
-  if (!day || !userPassphrase.value) return
-  const dateStr = dayjs(day).format('YYYY-MM-DD')
-
-  // a) Falls bereits neu ausgewählt -> entfernen
-  if (selectedDates.value.includes(dateStr)) {
-    selectedDates.value = selectedDates.value.filter(d => d !== dateStr)
-    return
-  }
-
-  // b) Falls bereits in DB (eigene Buchung), dann togglen wir Freigabe
-  if (myBookedDates.value.has(dateStr)) {
-    if (!deselectedDates.value.includes(dateStr)) {
-      deselectedDates.value.push(dateStr)
-    } else {
-      deselectedDates.value = deselectedDates.value.filter(d => d !== dateStr)
-    }
-    return
-  }
-
-  // c) Sonst: Neue Auswahl
-  if (selectedDates.value.length === 0) {
-    // 1. Klick -> push
-    selectedDates.value.push(dateStr)
-  } else if (selectedDates.value.length === 1) {
-    // 2. Klick -> Zeitspanne
-    let start = dayjs(selectedDates.value[0])
-    let end = dayjs(dateStr)
-    if (end.isBefore(start)) [start, end] = [end, start]
-
-    const range = []
-    let cur = start
-    while (cur.isSameOrBefore(end)) {
-      range.push(cur.format('YYYY-MM-DD'))
-      cur = cur.add(1, 'day')
-    }
-    selectedDates.value = range
-  } else {
-    // Schon mehr als 1 Tag drin -> reset auf diesen einen Tag
-    selectedDates.value = [dateStr]
-  }
-}
-
-// --------------------------
-// 7) Dynamischer Stil pro Tag
-// --------------------------
-function getDayStyle(day) {
-  if (!day) return {}
-  const dateStr = dayjs(day).format('YYYY-MM-DD')
-
-  // Wenn kein aktiver Calendar, zeigen wir nur Platzhalter-Tage
-  if (!userPassphrase.value) {
-    if (placeholderDates.value.includes(dateStr)) {
-      return { background: '#ccc', border: "0.5px solid #cfcfcf" }
-    }
-    return { background: '#fff', border: "0.5px solid #cfcfcf" }
-  }
-
-  // Neue Auswahl (noch nicht in DB)
-  if (selectedDates.value.includes(dateStr)) {
-    return { background: '#000', color: '#fff', border: "0.5px solid #000" }
-  }
-
-  // Eigene DB-Buchungen (grau + dicker schwarzer Rahmen), sofern nicht zur Freigabe markiert
-  if (myBookedDates.value.has(dateStr) && !deselectedDates.value.includes(dateStr)) {
-    return { background: '#ccc', border: "2px solid #000", color: "#000" }
-  }
-
-  // Buchungen anderer Nutzer - mit gradueller Färbung basierend auf der Anzahl der Buchungen
-  const count = otherBookingCount.value[dateStr] || 0
-  if (count > 0) {
-    // Dynamische Opazität basierend auf der Anzahl der Buchungen im Verhältnis zum Maximum
-    const opacityRange = bookingColorConfig.maxOpacity - bookingColorConfig.minOpacity;
-    const normalizedCount = Math.min(count / maxBookingsPerDay.value, 1);
-    const opacity = bookingColorConfig.minOpacity + (normalizedCount * opacityRange);
-
-    return {
-      background: bookingColorConfig.baseColor.replace(')', `, ${opacity})`).replace('rgb', 'rgba'),
-      border: "0.5px solid #cfcfcf",
-      color: opacity > 0.6 ? '#fff' : '#000' // Textfarbe anpassen für bessere Lesbarkeit
-    }
-  }
-
-  // Standard
-  return { background: '#fff', border: "0.5px solid #cfcfcf" }
-}
-
-// --------------------------
-// 8) Buchung absenden -> POST /api/entries (neue), POST /api/entries/remove (löschen)
-// --------------------------
-async function submitBooking() {
-  try {
-    // a) Neue Buchungen hinzufügen
-    if (selectedDates.value.length) {
-      await $fetch('/api/entries', {
-        method: 'POST',
-        body: {
-          groupPassphrase: userPassphrase.value,
-          userName: currentUser.value,
-          unavailableDates: selectedDates.value
-        }
-      })
-    }
-    // b) Eigene Buchungen entfernen
-    if (deselectedDates.value.length) {
-      await $fetch('/api/entries/remove', {
-        method: 'POST',
-        body: {
-          groupPassphrase: userPassphrase.value,
-          userName: currentUser.value,
-          unavailableDates: deselectedDates.value
-        }
-      })
-    }
-    // Reset
-    selectedDates.value = []
-    deselectedDates.value = []
-    fetchBookings()
-  } catch (error) {
-    console.error("Fehler beim Absenden der Buchung:", error)
-  }
-}
-
-// --------------------------
-// 9) Teilnehmerliste & Filter (optional)
+// 4) Teilnehmerliste & Filter
 // --------------------------
 const uniqueUsers = computed(() => {
-  const users = new Set()
+  const users = new Set();
   bookings.value.forEach(entry => {
-    if (entry.username) users.add(entry.username)
-  })
-  return Array.from(users)
-})
+    if (entry.username) users.add(entry.username);
+  });
+  return Array.from(users);
+});
 
-const filterUser = ref('')
 function toggleFilterUser(user) {
-  filterUser.value = filterUser.value === user ? '' : user
+  filterUser.value = filterUser.value === user ? '' : user;
 }
+
 function clearFilter() {
-  filterUser.value = ''
+  filterUser.value = '';
 }
 
 // --------------------------
-// 10) Generate random placeholder dates
-// --------------------------
-function generateRandomPlaceholderDates() {
-  const dates = []
-  const totalDates = 80 // Anzahl der zufälligen Tage
-
-  for (let i = 0; i < totalDates; i++) {
-    const month = Math.floor(Math.random() * 12)
-    const maxDay = new Date(currentDisplayYear.value, month + 1, 0).getDate()
-    const day = Math.floor(Math.random() * maxDay) + 1
-    const dateStr = dayjs(new Date(currentDisplayYear.value, month, day)).format('YYYY-MM-DD')
-
-    // Vermeiden von Duplikaten
-    if (!dates.includes(dateStr)) {
-      dates.push(dateStr)
-    }
-  }
-
-  placeholderDates.value = dates
-}
-
-// --------------------------
-// 11) Jahr-Navigation
-// --------------------------
-function nextYear() {
-  currentDisplayYear.value++;
-  generateRandomPlaceholderDates();
-}
-
-function prevYear() {
-  if (currentDisplayYear.value > currentRealYear) {
-    currentDisplayYear.value--;
-    generateRandomPlaceholderDates();
-  }
-}
-
-// --------------------------
-// 12) Passphrase kopieren & zur Startseite zurückkehren
+// 5) Passphrase kopieren & zur Startseite zurückkehren
 // --------------------------
 function copyPassphraseToClipboard() {
   navigator.clipboard.writeText(userPassphrase.value)
@@ -529,22 +340,25 @@ function returnToStartPage() {
 }
 
 // --------------------------
-// 13) Destination Suggestions
+// 6) Destination Suggestions und Polls
 // --------------------------
 async function addDestinationSuggestion(newDestination) {
   try {
     const response = await $fetch('/api/destinations', {
       method: 'POST',
       body: {
-        groupPassphrase: userPassphrase.value,
+        grouppassphrase: userPassphrase.value,
         author: currentUser.value,
-        destination: newDestination
+        name: newDestination.name,
+        type: newDestination.type,
+        duration: newDestination.duration,
+        budget: newDestination.budget,
+        notes: newDestination.notes
       }
     });
 
     if (response.message) {
       await fetchDestinationSuggestions();
-      showDestinations.value = true;
     }
   } catch (error) {
     console.error("Fehler beim Speichern des Zielvorschlags:", error);
@@ -566,16 +380,190 @@ async function fetchDestinationSuggestions() {
   }
 }
 
-function toggleShowDestinations() {
-  showDestinations.value = !showDestinations.value;
-  if (showDestinations.value && destinationSuggestions.value.length === 0) {
-    fetchDestinationSuggestions();
+function handleDestinationSelection(selected) {
+  selectedDestinations.value = selected;
+}
+
+function openCreatePollModal() {
+  isCreatePollModalOpen.value = true;
+}
+
+function closeCreatePollModal() {
+  isCreatePollModalOpen.value = false;
+}
+
+async function createPoll(pollData) {
+  try {
+    const response = await $fetch('/api/polls', {
+      method: 'POST',
+      body: {
+        grouppassphrase: userPassphrase.value,
+        createdby: currentUser.value,
+        enddate: pollData.endDate,
+        destinations: pollData.destinations
+      }
+    });
+
+    if (response.message) {
+      await fetchPolls();
+      selectedDestinations.value = [];
+    }
+  } catch (error) {
+    console.error("Fehler beim Erstellen der Umfrage:", error);
+  }
+
+  closeCreatePollModal();
+}
+
+async function fetchPolls() {
+  if (!userPassphrase.value) return;
+
+  try {
+    const response = await $fetch(`/api/polls/${userPassphrase.value}`);
+    if (response.polls) {
+      polls.value = response.polls;
+    }
+  } catch (error) {
+    console.error("Fehler beim Abrufen der Umfragen:", error);
   }
 }
 
-// Beim Jahr-Wechsel neue Platzhalter-Daten generieren
+async function submitPollVote(voteData) {
+  try {
+    await $fetch('/api/polls/vote', {
+      method: 'POST',
+      body: {
+        poll_id: voteData.pollId,
+        username: currentUser.value,
+        selected_destinations: voteData.selectedDestinations
+      }
+    });
+    await fetchPolls();
+  } catch (error) {
+    console.error("Fehler beim Abstimmen:", error);
+  }
+}
+
+// Neue Methode zum Löschen eines Destinations-Vorschlags
+async function deleteDestination(destination) {
+  if (confirm(`Wirklich den Vorschlag "${destination.name}" löschen?`)) {
+    try {
+      const response = await $fetch('/api/destinations/delete', {
+        method: 'POST',
+        body: {
+          id: destination.id,
+          author: currentUser.value
+        }
+      });
+
+      if (response.success) {
+        await fetchDestinationSuggestions(); // Liste neu laden
+      } else {
+        console.error("Fehler beim Löschen:", response.message || "Unbekannter Fehler");
+      }
+    } catch (error) {
+      console.error("Fehler beim Löschen des Zielvorschlags:", error);
+    }
+  }
+}
+
+// Neue Funktion zum Prüfen, ob ein Tag hervorgehoben werden soll
+function isHighlightedDay(day) {
+  if (!day) return false;
+
+  const dateStr = day.toISOString().split('T')[0];
+  return highlightedDates.value.includes(dateStr);
+}
+
+// Handler für das highlight-dates Event
+function handleHighlightDates(data) {
+  console.log("Kalenderdaten zum Hervorheben empfangen:", data);
+
+  // Bestehenden Timer löschen, falls vorhanden
+  if (highlightTimeout) {
+    clearTimeout(highlightTimeout);
+    highlightTimeout = null;
+  }
+
+  // Setze die hervorgehobenen Daten
+  highlightedDates.value = data.dates || [];
+
+  // Wenn Daten gefunden wurden, zeige sie für 15 Sekunden
+  if (data.dates && data.dates.length > 0) {
+    console.log(`${data.dates.length} Tage werden im Kalender markiert`);
+
+    // Setze einen Timer, um die Hervorhebung nach 15 Sekunden zu entfernen
+    highlightTimeout = setTimeout(() => {
+      highlightedDates.value = [];
+      console.log("Kalenderhervorhebung zurückgesetzt");
+    }, 15000);
+  }
+}
+
+// Neue Funktion zum Löschen von Polls - vereinfacht und mit mehr Logging
+async function deletePoll(poll) {
+  console.log("Löschversuch für Poll:", poll);
+  console.log("Aktueller Benutzer:", currentUser.value);
+  console.log("Poll-Ersteller:", poll.createdby);
+
+  // Bestätigungsdialog mit klaren Informationen
+  const confirmMessage = `Wirklich die Umfrage mit ID ${poll.id} löschen?\n` +
+    `Erstellt von: ${poll.createdby}\n` +
+    `Du bist angemeldet als: ${currentUser.value}`;
+
+  if (confirm(confirmMessage)) {
+    try {
+      console.log("Sende Löschanfrage...");
+
+      const response = await $fetch('/api/polls/delete', {
+        method: 'POST',
+        body: {
+          poll_id: poll.id,
+          author: currentUser.value // Zur Überprüfung, ob der aktuelle Benutzer der Autor ist
+        }
+      });
+
+      console.log("Antwort vom Server:", response);
+
+      if (response.success) {
+        alert("Umfrage erfolgreich gelöscht!");
+        await fetchPolls(); // Liste neu laden
+      } else {
+        alert(`Fehler beim Löschen: ${response.message || "Unbekannter Fehler"}`);
+        console.error("Server-Fehlermeldung:", response.message);
+      }
+    } catch (error) {
+      alert("Fehler bei der Löschung: " + error.message);
+      console.error("Fehler beim Löschen der Umfrage:", error);
+    }
+  }
+}
+
+// Hilfsfunktion, um einen leserlichen Titel für die Bestätigungsabfrage zu erstellen
+function getPollTitle(poll) {
+  if (!poll || !poll.destinations || poll.destinations.length === 0) {
+    return "Unbenannte Umfrage";
+  }
+
+  if (poll.destinations.length === 1) {
+    return poll.destinations[0].name;
+  }
+
+  return `${poll.destinations[0].name} und ${poll.destinations.length - 1} weitere`;
+}
+
+// --------------------------
+// 7) Lifecycle hooks und watches
+// --------------------------
 watch(currentDisplayYear, () => {
   generateRandomPlaceholderDates();
+});
+
+watch(userPassphrase, (newVal) => {
+  if (newVal) {
+    fetchPolls();
+    fetchDestinationSuggestions();
+  }
 });
 
 onMounted(() => {
@@ -588,7 +576,7 @@ onMounted(() => {
     joinPassphrase.value = paramPassphrase;
     openJoinModal();
   }
-})
+});
 </script>
 
 <style scoped>
@@ -622,83 +610,6 @@ onMounted(() => {
   background: #555;
 }
 
-.title {
-  font-size: clamp(4rem, 19vw, 19rem);
-  font-weight: bold;
-  margin-bottom: 5rem;
-  color: #131313;
-  text-align: justify;
-  white-space: nowrap;
-  line-height: 65%;
-}
-
-.title::after {
-  content: "";
-  display: inline-block;
-  width: 100%;
-}
-
-.logo {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  font-size: 2rem;
-  font-weight: bold;
-  color: #000;
-}
-
-.passphrase-display {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  padding-bottom: 2rem;
-  font-size: 1rem;
-  color: #555;
-  background: rgba(255, 255, 255, 0.7);
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-.passphrase-display:hover {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.passphrase-text {
-  font-weight: bold;
-}
-
-.user-name-display {
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-  color: #777;
-}
-
-.copy-hint {
-  position: absolute;
-  bottom: -25px;
-  right: 0;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 0.8rem;
-}
-
-.main-header {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-bottom: 2rem;
-}
-
-.header-buttons {
-  display: flex;
-  gap: 1rem;
-}
-
 .btn {
   padding: 1rem 2rem;
   border: none;
@@ -709,7 +620,6 @@ onMounted(() => {
   font-size: 1rem;
   cursor: pointer;
   transition: background 0.3s ease;
-
 }
 
 .btn:hover {
@@ -718,6 +628,11 @@ onMounted(() => {
 
 .btn.btn-secondary {
   background: #777;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .modal-overlay {
@@ -748,7 +663,6 @@ onMounted(() => {
   border: 0.5px solid #bcbcbc;
 }
 
-
 .modal-content form {
   display: flex;
   flex-direction: column;
@@ -762,6 +676,7 @@ onMounted(() => {
 }
 
 .calendar-container {
+  position: relative;
   width: 100%;
   max-width: 1200px;
   background: #fff;
@@ -769,6 +684,7 @@ onMounted(() => {
   overflow: hidden;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   margin: 4rem auto;
+  padding-bottom: 4rem;
   transition: margin-top 0.5s ease, transform 0.5s ease;
 }
 
@@ -780,9 +696,19 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2rem;
+  padding: 1rem;
   background: #000;
   position: relative;
+}
+
+.user-filter-container {
+  color: #fff;
+  flex: 1;
+  text-align: left;
+  padding-right: 2rem;
+  z-index: 1;
+  max-width: 60%;
+  width: 50% !important;
 }
 
 .year-display {
@@ -793,6 +719,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 15px;
+  z-index: 2;
 }
 
 .current-year {
@@ -802,57 +729,13 @@ onMounted(() => {
 
 .year-nav-button {
   color: #aaa;
-  /* grau */
   font-size: calc(2rem - 1rem);
-  /* 1rem kleiner als das aktuelle Jahr */
   cursor: pointer;
   transition: color 0.3s ease;
 }
 
 .year-nav-button:hover {
   color: #fff;
-}
-
-.user-list-header {
-  color: #fff;
-  flex: 1;
-}
-
-.user-list-header ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  color: #fff;
-}
-
-.user-list-header {
-  color: #fff;
-  flex: 1;
-}
-
-.user-list-header ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  width: 60%;
-}
-
-.user-list-header li {
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border: 0.2px solid #fff;
-  border-radius: 1rem;
-  font-size: 0.8rem;
-  transition: background 0.3s ease;
-}
-
-.user-list-header li.active,
-.user-list-header li:hover {
-  background: #333;
 }
 
 .home-button-container {
@@ -921,47 +804,71 @@ onMounted(() => {
   border: 0.5px solid #e7e7e7;
 }
 
-.booking-actions {
-  margin-top: 1rem;
+.enter-button-container {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
 }
 
-/* Jahr-Navigation Styles */
-.year-nav-top,
-.year-nav-bottom {
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.create-poll-button-container {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.landing-page {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  width: 2rem;
-  padding: 0.5rem 2rem;
-  margin: 0.5rem 0;
-  border-radius: 1rem;
-  background: rgba(0, 0, 0, 0.05);
-  transition: background 0.3s ease;
+  margin-top: 5rem;
+  overflow-x: hidden;
 }
 
-.year-nav-top:hover,
-.year-nav-bottom:hover {
-  background: rgba(0, 0, 0, 0.1);
+.title {
+  width: 100vw;
+  font-size: clamp(4rem, 19vw, 19rem);
+  font-weight: bold;
+  margin-bottom: 5rem;
+  margin-left: -2rem;
+  margin-right: -2rem;
+  padding: 0 2rem;
+  color: #131313;
+  white-space: nowrap;
+  line-height: 60%;
+  text-align: justify;
+  letter-spacing: -0.02em;
 }
 
-.year-nav-arrow {
-  font-size: 1.2rem;
+.title::after {
+  content: "";
+  display: inline-block;
+  width: 100%;
 }
 
-.year-nav-text {
-  font-size: 1rem;
-  margin: 0 0.5rem;
+.header-buttons {
+  display: flex;
+  gap: 1rem;
 }
 
-.page-transitioning-up {
-  transform: translateY(-100%);
-  opacity: 0;
+/* Stil für hervorgehobene Tage */
+.day.highlighted-day {
+  background-color: rgba(0, 128, 0, 0.2) !important;
+  /* Leichtes Grün */
+  border: 1px solid green !important;
+  position: relative;
+  z-index: 1;
 }
 
-.page-transitioning-down {
-  transform: translateY(100%);
-  opacity: 0;
+.day.highlighted-day:hover {
+  background-color: rgba(0, 128, 0, 0.4) !important;
+  /* Etwas dunkleres Grün beim Hover */
 }
 </style>

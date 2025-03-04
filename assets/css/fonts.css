@@ -1,0 +1,15 @@
+/* sofia-sans-v16-latin - Schriftarten */
+@font-face {
+    font-family: 'Sofia Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: url('/assets/fonts/sofia-sans-v16-latin-regular.woff2') format('woff2');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Sofia Sans';
+    font-style: normal;
+    font-weight: 700;
+    src: url('/assets/fonts/sofia-sans-v16-latin-700.woff2') format('woff2');
+}
