@@ -1,27 +1,15 @@
 <template>
   <div>
-
-    <head>
-
-
-      <title>Dateplan</title>
-    </head>
     <NuxtPage />
-
-    <header></header>
   </div>
 </template>
 
-<script setup>
-</script>
-
 <style>
-@import url("/assets/font.css");
-
-html {
-  font-family: "sofia sans", sans-serif;
+/* Hier könntest du deinen globalen CSS-Code einfügen */
+body {
+  font-family: 'Sofia Sans', sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #f5f5f5;
 }
+/* Einfache, allgemeine Styles - aber keine komplexen Font-Face-Definitionen */
 </style>
