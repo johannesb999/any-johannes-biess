@@ -272,8 +272,13 @@ async function createCalendar() {
 
     if (res.message) {
       createdPassphrase.value = generatedPassphrase;
-      invitationLink.value = window.location.origin + '/?passphrase=' + generatedPassphrase;
-      await navigator.clipboard.writeText(invitationLink.value);
+      // Dynamisch clientseitig generieren
+      if (process.client) {
+        invitationLink.value = window.location.origin + '/?passphrase=' + generatedPassphrase;
+        copyToClipboard(invitationLink.value);
+      } else {
+        invitationLink.value = '/?passphrase=' + generatedPassphrase;
+      }
       userPassphrase.value = generatedPassphrase;
       currentUser.value = newAdminName.value;
       isCreateModalOpen.value = false;
@@ -284,6 +289,22 @@ async function createCalendar() {
     console.error("Fehler beim Erstellen des Calendars:", error);
   }
 }
+
+// Browser-API-Zugriffe sicher machen
+const copyToClipboard = (text) => {
+  if (process.client) {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        showCopyHint.value = true;
+        setTimeout(() => {
+          showCopyHint.value = false;
+        }, 2000);
+      })
+      .catch(err => {
+        console.error("Fehler beim Kopieren:", err);
+      });
+  }
+};
 
 async function joinCalendar() {
   if (joinPassphrase.value && joinUserName.value) {
@@ -572,12 +593,14 @@ watch(userPassphrase, (newVal) => {
 onMounted(() => {
   generateRandomPlaceholderDates();
 
-  // URL-Parameter für Passphrase prüfen
-  const urlParams = new URLSearchParams(window.location.search);
-  const paramPassphrase = urlParams.get('passphrase');
-  if (paramPassphrase) {
-    joinPassphrase.value = paramPassphrase;
-    openJoinModal();
+  // URL-Parameter nur clientseitig prüfen
+  if (process.client) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramPassphrase = urlParams.get('passphrase');
+    if (paramPassphrase) {
+      joinPassphrase.value = paramPassphrase;
+      openJoinModal();
+    }
   }
 });
 </script>
