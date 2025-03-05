@@ -2,8 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { useRuntimeConfig } from '#imports';
 
-const config = useRuntimeConfig();
-const SUPABASE_URL = config.supabaseUrl;
-const SUPABASE_KEY = config.supabaseKey;
+// Konfiguration aus Umgebungsvariablen holen
+const runtimeConfig = useRuntimeConfig();
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Supabase-Client mit SERVICE ROLE KEY erstellen (umgeht RLS)
+export const supabase = createClient(
+    runtimeConfig.supabaseUrl,
+    runtimeConfig.supabaseServiceKey, // SERVICE KEY statt anon key verwenden
+    {
+        auth: {
+            persistSession: false
+        }
+    }
+);
