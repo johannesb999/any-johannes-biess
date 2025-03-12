@@ -18,13 +18,10 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Supabase-Verbindung testen
-    const config = useRuntimeConfig();
-    console.log("Supabase-URL definiert:", !!config.supabaseUrl);
-    console.log("Supabase-Key definiert:", !!config.supabaseKey);
-
     console.log("Versuche Gruppe zu erstellen...");
-    const { data, error } = await supabase
+
+    // Versuche die Einfügung mit umfangreichem Error-Handling
+    const insertOperation = supabase
       .from('groups')
       .insert([{
         groupname: groupName || "",
@@ -34,18 +31,26 @@ export default defineEventHandler(async (event) => {
       }])
       .single();
 
+    console.log("Supabase-Anfrage gestartet");
+
+    const { data, error } = await insertOperation;
+
     if (error) {
       console.error("Supabase-Fehler beim Einfügen:", error.message);
       console.error("Fehlercode:", error.code);
-      console.error("Details:", error.details);
-      return { statusCode: 500, error: error.message };
+      console.error("Details:", JSON.stringify(error.details || {}));
+      return { statusCode: 500, error: error.message, details: error.details };
     }
 
-    console.log("Gruppe erfolgreich erstellt");
+    console.log("Gruppe erfolgreich erstellt:", data?.id || "keine ID zurückgegeben");
     return { message: 'Gruppe erstellt', group: data };
   } catch (err) {
     console.error("Unbehandelte Exception in groups.post.js:", err);
     console.error("Stack trace:", err.stack);
-    return { statusCode: 500, error: err.message };
+    return {
+      statusCode: 500,
+      error: err.message,
+      trace: process.env.NODE_ENV === 'production' ? 'Fehlerdetails im Server-Log' : err.stack
+    };
   }
 });

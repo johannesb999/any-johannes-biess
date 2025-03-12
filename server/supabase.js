@@ -4,17 +4,20 @@ import { useRuntimeConfig } from '#imports';
 
 // Konfiguration aus Umgebungsvariablen holen
 const runtimeConfig = useRuntimeConfig();
-const supabaseUrl = runtimeConfig.supabaseUrl;
-const supabaseKey = runtimeConfig.supabaseKey;
 
-// Prüfe, ob die Umgebungsvariablen gesetzt sind
-if (!supabaseUrl) {
-    console.error("KRITISCHER FEHLER: SUPABASE_URL ist nicht definiert!");
+// Supabase-Konfiguration mit Fallback für die Produktionsumgebung
+let supabaseUrl = runtimeConfig.supabaseUrl;
+let supabaseKey = runtimeConfig.supabaseKey;
+
+// Fallback-Werte für die Produktionsumgebung, wenn Umgebungsvariablen nicht verfügbar sind
+if (!supabaseUrl || !supabaseKey) {
+    console.log("WARNUNG: Verwende Fallback-Werte für Supabase-Konfiguration");
+    supabaseUrl = "https://mgeszojmmopdhtiscirg.supabase.co";
+    supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nZXN6b2ptbW9wZGh0aXNjaXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA5OTk3NzksImV4cCI6MjA1NjU3NTc3OX0.KKj1L__25M2s2t1aw56c97TGjzvTOSYBZFf1HNrCpYg";
 }
 
-if (!supabaseKey) {
-    console.error("KRITISCHER FEHLER: SUPABASE_KEY ist nicht definiert!");
-}
+console.log("Supabase URL verfügbar:", !!supabaseUrl);
+console.log("Supabase Key verfügbar:", !!supabaseKey);
 
 let client;
 try {
