@@ -2,34 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { useRuntimeConfig } from '#imports';
 
-export default defineEventHandler(() => {
-    const runtimeConfig = useRuntimeConfig();
-
-    // Debug-Logging
-    console.log('SUPABASE CONNECTION ATTEMPT');
-    console.log('Supabase URL available:', !!runtimeConfig.supabaseUrl);
-    console.log('Supabase Key available (first 5 chars):',
-        runtimeConfig.supabaseKey ? runtimeConfig.supabaseKey.substring(0, 5) + '...' : 'NOT AVAILABLE');
-
-    // Client mit erweiterten Debug-Optionen erstellen
-    const supabase = createClient(
-        runtimeConfig.supabaseUrl,
-        runtimeConfig.supabaseKey,
-        {
-            auth: { persistSession: false },
-            db: { schema: 'public' }
-        }
-    );
-
-    return supabase;
-});
-
-// Alternativ, falls Sie keinen defineEventHandler verwenden möchten:
+// Konfiguration aus Umgebungsvariablen holen
 const runtimeConfig = useRuntimeConfig();
-console.log('SUPABASE CONNECTION SETUP');
-console.log('Supabase URL available:', !!runtimeConfig.supabaseUrl);
 
+// Supabase-Client mit SERVICE ROLE KEY erstellen (umgeht RLS)
 export const supabase = createClient(
     runtimeConfig.supabaseUrl,
-    runtimeConfig.supabaseKey
+    runtimeConfig.supabaseServiceKey, // SERVICE KEY statt anon key verwenden
+    {
+        auth: {
+            persistSession: false
+        }
+    }
 );

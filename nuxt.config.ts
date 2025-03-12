@@ -6,14 +6,6 @@ export default defineNuxtConfig({
   // Die nitro-Konfiguration zum Routing hinzufügen
   nitro: {
     routeRules: {
-      '/api/**': {
-        cors: true,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,HEAD,PUT,PATCH,POST,DELETE',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }
-      },
       '/': { prerender: true }
     }
   },
@@ -21,6 +13,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_KEY,
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY, // Service-Key hinzufügen
     
     public: {}
   },
