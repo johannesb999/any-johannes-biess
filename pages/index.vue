@@ -22,7 +22,7 @@
         <h2>Create new Calendar</h2>
         <form @submit.prevent="createCalendar">
           <div>
-            <label for="adminName">Your Name:</label>
+            <label for="adminName">Your Name: </label>
             <input class="input" type="text" id="adminName" v-model="newAdminName" required />
           </div>
           <div class="modal-buttons">
@@ -57,7 +57,7 @@
           </div>
           <div class="modal-buttons">
             <button type="button" class="btn btn-secondary" @click="closeJoinModal">cancel</button>
-            <button type="submit" class="btn">Join</button>
+            <button type="submit" class="btn">join</button>
           </div>
         </form>
       </div>
@@ -259,8 +259,17 @@ function closeSuggestDestinationModal() {
 }
 
 async function createCalendar() {
+  console.log("CreateCalendar-Funktion gestartet");
   const generatedPassphrase = Math.random().toString(36).substring(2, 10);
+  console.log("Passphrase generiert:", generatedPassphrase);
+
   try {
+    console.log("Sende API-Anfrage zur Gruppenerstellung mit:", {
+      groupName: 'Neuer Calendar',
+      adminName: newAdminName.value,
+      passphrase: generatedPassphrase
+    });
+
     const res = await $fetch('/api/groups', {
       method: 'POST',
       body: {
@@ -270,41 +279,50 @@ async function createCalendar() {
       }
     });
 
+    console.log("Antwort von der API erhalten:", res);
+
     if (res.message) {
+      console.log("Erfolgreiche Antwort mit Nachricht:", res.message);
       createdPassphrase.value = generatedPassphrase;
+
       // Dynamisch clientseitig generieren
       if (process.client) {
         invitationLink.value = window.location.origin + '/?passphrase=' + generatedPassphrase;
         copyToClipboard(invitationLink.value);
+        console.log("Einladungslink generiert:", invitationLink.value);
       } else {
         invitationLink.value = '/?passphrase=' + generatedPassphrase;
       }
+
       userPassphrase.value = generatedPassphrase;
       currentUser.value = newAdminName.value;
+      console.log("Benutzerdaten aktualisiert:", {
+        userPassphrase: userPassphrase.value,
+        currentUser: currentUser.value
+      });
+
       isCreateModalOpen.value = false;
       isJoinModalOpen.value = false;
       fetchBookings();
+    } else {
+      console.warn("Keine Nachricht in der API-Antwort gefunden:", res);
+      alert("Kalender wurde erstellt, aber es gab ein Problem beim Laden der Details.");
+      // Trotzdem versuchen, den Kalender zu öffnen
+      userPassphrase.value = generatedPassphrase;
+      currentUser.value = newAdminName.value;
+      isCreateModalOpen.value = false;
     }
   } catch (error) {
     console.error("Fehler beim Erstellen des Calendars:", error);
+    console.error("Detailierter Fehler:", {
+      message: error.message,
+      data: error.data,
+      status: error.status
+    });
+
+    alert(`Fehler beim Erstellen des Kalenders: ${error.message || 'Unbekannter Fehler'}`);
   }
 }
-
-// Browser-API-Zugriffe sicher machen
-const copyToClipboard = (text) => {
-  if (process.client) {
-    navigator.clipboard.writeText(text)
-      .then(() => {
-        showCopyHint.value = true;
-        setTimeout(() => {
-          showCopyHint.value = false;
-        }, 2000);
-      })
-      .catch(err => {
-        console.error("Fehler beim Kopieren:", err);
-      });
-  }
-};
 
 async function joinCalendar() {
   if (joinPassphrase.value && joinUserName.value) {
@@ -819,7 +837,9 @@ onMounted(() => {
   margin: 0.25rem;
   font-size: 0.8rem;
   background: #fff;
-  transition: background 0.3s ease, border 0.3s ease;
+  color: #000;
+  /* Standard-Textfarbe schwarz */
+  transition: background 0.3s ease, border 0.3s ease, color 0.3s ease;
 }
 
 .day:hover {

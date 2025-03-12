@@ -10,7 +10,7 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
     const selectedDates = ref([]);
     const deselectedDates = ref([]);
 
-    // Computed properties für Buchungen
+    // Computed properties für Buchungen - als Array statt Set zurückgeben
     const myBookedDates = computed(() => {
         const dates = new Set();
         bookings.value.forEach(entry => {
@@ -18,7 +18,7 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
                 entry.unavailabledates.forEach(d => dates.add(d));
             }
         });
-        return dates;
+        return Array.from(dates); // In ein Array umwandeln statt ein Set zurückzugeben
     });
 
     // Gefilterte Bookings für die Anzeige
@@ -155,7 +155,8 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
         }
 
         // b) Falls bereits in DB (eigene Buchung), dann togglen wir Freigabe
-        if (myBookedDates.value.has(dateStr)) {
+        // Jetzt mit .includes() statt .has(), da myBookedDates ein Array ist
+        if (myBookedDates.value.includes(dateStr)) {
             if (!deselectedDates.value.includes(dateStr)) {
                 deselectedDates.value.push(dateStr);
             } else {
@@ -200,10 +201,15 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
                 return {
                     background: `rgba(80, 80, 80, ${opacity})`,
                     border: "0.5px solid #cfcfcf",
-                    color: opacity > 0.6 ? '#fff' : '#000'
+                    color: opacity > 0.6 ? '#fff' : '#000' // Textfarbe abhängig vom Hintergrund
                 };
             }
-            return { background: '#fff', border: "0.5px solid #cfcfcf" };
+            // Standard für leere Tage - EXPLIZITE SCHWARZE TEXTFARBE
+            return {
+                background: '#fff',
+                border: "0.5px solid #cfcfcf",
+                color: "#000" // Explizit schwarze Schrift für leere Tage
+            };
         }
 
         // Neue Auswahl (noch nicht in DB)
@@ -212,8 +218,18 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
         }
 
         // Eigene DB-Buchungen (grau + dicker schwarzer Rahmen), sofern nicht zur Freigabe markiert
-        if (myBookedDates.value.has(dateStr) && !deselectedDates.value.includes(dateStr)) {
+        // Jetzt mit .includes() statt .has(), da myBookedDates ein Array ist
+        if (myBookedDates.value.includes(dateStr) && !deselectedDates.value.includes(dateStr)) {
             return { background: '#ccc', border: "2px solid #000", color: "#000" };
+        }
+
+        // Freigabe-markierte Tage - EXPLIZIT SCHWARZE TEXTFARBE
+        if (deselectedDates.value.includes(dateStr)) {
+            return {
+                background: '#fff',
+                border: "0.5px solid #cfcfcf",
+                color: "#000" // Explizit schwarze Schrift für freigegebene Tage
+            };
         }
 
         // Buchungen anderer Nutzer - mit gradueller Färbung basierend auf der Anzahl der Buchungen
@@ -230,12 +246,16 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
             return {
                 background: `rgba(${baseColor.match(/\d+/g).join(', ')}, ${opacity})`,
                 border: "0.5px solid #cfcfcf",
-                color: opacity > 0.6 ? '#fff' : '#000'
+                color: opacity > 0.6 ? '#fff' : '#000' // Weiß bei dunklem Hintergrund, sonst schwarz
             };
         }
 
-        // Standard
-        return { background: '#fff', border: "0.5px solid #cfcfcf" };
+        // Standard für normale Tage - EXPLIZIT SCHWARZE TEXTFARBE
+        return {
+            background: '#fff',
+            border: "0.5px solid #cfcfcf",
+            color: "#000" // Explizit schwarze Schrift für alle normalen Tage
+        };
     }
 
     async function submitBooking() {
