@@ -298,6 +298,10 @@ onMounted(() => {
     height: 1.5rem;
 }
 
+#preferredMonth {
+    height: 2rem;
+}
+
 .modal-content form {
     display: flex;
     flex-direction: column;
