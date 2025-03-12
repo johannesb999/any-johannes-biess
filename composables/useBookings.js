@@ -129,19 +129,63 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
     // Speichere die Intensitäten für verschiedene Graustufen
     const placeholderIntensities = ref({});
 
+    // Status für das Laden der Buchungen
+    const loadingStatus = ref({
+        loading: false,
+        error: null,
+        lastUpdated: null
+    });
+
     // Methoden
-    function fetchBookings() {
+    async function fetchBookings() {
         if (!userPassphrase.value) {
             bookings.value = [];
-            return;
+            loadingStatus.value = {
+                loading: false,
+                error: 'Kein Zugangscode angegeben',
+                lastUpdated: new Date()
+            };
+            return null;
         }
 
-        return $fetch(`/api/entries/${userPassphrase.value}`)
-            .then(res => { bookings.value = res.entries || []; })
-            .catch(err => {
-                console.error("Error fetching bookings:", err);
+        loadingStatus.value.loading = true;
+        loadingStatus.value.error = null;
+
+        try {
+            const response = await $fetch(`/api/entries/${userPassphrase.value}`);
+
+            if (!response) {
+                throw new Error('Keine Antwort vom Server erhalten');
+            }
+
+            // Prüfe, ob die Antwort die erwartete Struktur hat
+            if (response && Array.isArray(response.entries)) {
+                bookings.value = response.entries;
+            } else if (Array.isArray(response)) {
+                // Fallback für den Fall, dass direkt ein Array zurückgegeben wird
+                bookings.value = response;
+            } else {
                 bookings.value = [];
-            });
+                console.warn('Unerwartetes Antwortformat:', response);
+            }
+
+            loadingStatus.value = {
+                loading: false,
+                error: null,
+                lastUpdated: new Date()
+            };
+
+            return response;
+        } catch (err) {
+            console.error("Error fetching bookings:", err);
+            bookings.value = [];
+            loadingStatus.value = {
+                loading: false,
+                error: `Fehler beim Laden der Daten: ${err.message || 'Unbekannter Fehler'}`,
+                lastUpdated: new Date()
+            };
+            return null;
+        }
     }
 
     function toggleDaySelection(day) {
@@ -294,6 +338,34 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
     // Initialisierung
     generateRandomPlaceholderDates();
 
+    // Funktion zum Kopieren von Text in die Zwischenablage
+    function copyToClipboard(text) {
+        if (!navigator.clipboard) {
+            // Fallback für ältere Browser
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if (!successful) {
+                    console.error('Kopieren fehlgeschlagen');
+                }
+            } catch (err) {
+                console.error('Fehler beim Kopieren:', err);
+            }
+
+            document.body.removeChild(textArea);
+        } else {
+            // Moderne Browser mit Clipboard API
+            navigator.clipboard.writeText(text)
+                .catch(err => console.error('Fehler beim Kopieren:', err));
+        }
+    }
+
     // Rückgabe der relevanten Werte und Funktionen
     return {
         bookings,
@@ -305,10 +377,12 @@ export function useBookings(userPassphrase, currentUser, currentDisplayYear, fil
         otherBookingCount,
         maxBookingsPerDay,
         hasChanges,
+        loadingStatus,  // Neuen Status exportieren
         fetchBookings,
         toggleDaySelection,
         getDayStyle,
         submitBooking,
-        generateRandomPlaceholderDates
+        generateRandomPlaceholderDates,
+        copyToClipboard
     };
 }

@@ -214,7 +214,8 @@ const {
   toggleDaySelection,
   getDayStyle,
   submitBooking,
-  generateRandomPlaceholderDates
+  generateRandomPlaceholderDates,
+  copyToClipboard // Stelle sicher, dass copyToClipboard hier destrukturiert wird
 } = useBookings(userPassphrase, currentUser, currentDisplayYear, filterUser);
 
 // Destination Suggestions
